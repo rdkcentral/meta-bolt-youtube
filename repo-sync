@@ -24,7 +24,7 @@ set -e
 BASE_DIR=$(readlink -m "$(dirname "${BASH_SOURCE[0]}")")
 MANIFEST="${BASE_DIR}/manifests/deps.xml"
 
-mkdir -p bolt
+mkdir -p deps
 pushd $_
 repo init --standalone-manifest --manifest-url="file://${MANIFEST}" ${BOLT_REPO_INIT_PARAMS}
 repo sync ${BOLT_REPO_SYNC_PARAMS}

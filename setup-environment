@@ -21,15 +21,17 @@ test -f .env && source $_
 
 META_ROOT=$(readlink -m "$(dirname "${BASH_SOURCE[0]}")")
 
-if [ ! -d bolt ]; then
+if [ ! -d deps ]; then
   ${META_ROOT}/repo-sync
 fi
 
-source bolt/setup-environment
+source deps/bolt/setup-environment
 
-DIR_FILE=$(basename ${META_ROOT}).done
+if [ "$(pwd)" = "$(readlink -m $BUILDDIR)" ]; then
+  DIR_FILE=$(basename ${META_ROOT}).done
 
-if [ ! -f conf/${DIR_FILE} ]; then
-  echo "BBLAYERS:append = \" ${META_ROOT}\"" >> conf/bblayers.conf
-  echo ${META_ROOT} > conf/${DIR_FILE}
+  if [ ! -f conf/${DIR_FILE} ]; then
+    echo "BBLAYERS:append = \" ${META_ROOT}\"" >> conf/bblayers.conf
+    echo ${META_ROOT} > conf/${DIR_FILE}
+  fi
 fi
