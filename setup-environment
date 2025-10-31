@@ -30,5 +30,6 @@ source bolt/setup-environment
 DIR_FILE=$(basename ${META_ROOT}).done
 
 if [ ! -f conf/${DIR_FILE} ]; then
+  echo "BBLAYERS:append = \" ${META_ROOT}\"" >> conf/bblayers.conf
   echo ${META_ROOT} > conf/${DIR_FILE}
 fi
