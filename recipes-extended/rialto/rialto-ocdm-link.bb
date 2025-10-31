@@ -5,7 +5,7 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/Apache-2.0;md5=89aea4e17d99a7ca
 SRC_URI = "file://ocdm.pc"
 
 DEPENDS += "rialto-ocdm"
-DEPENDS += "wpeframework-ocdm-headers"
+DEPENDS += "ocdm-headers"
 
 do_compile[noexec] = "1"
 do_configure[noexec] = "1"
