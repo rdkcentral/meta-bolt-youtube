@@ -1,0 +1,5 @@
+
+  bitbake cobalt-bolt-image          # no multi config
+
+  bitbake mc:arm:cobalt-bolt-image   # requires multi config
+
