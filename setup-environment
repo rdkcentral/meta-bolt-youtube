@@ -31,6 +31,8 @@ if [ -f ${SETUP_SCRIPT} ]; then
 fi
 
 if [[ -n "${BUILDDIR}" && "$(pwd)" == "$(readlink -m ${BUILDDIR})" ]]; then
+  cat ${META_ROOT}/conf/conf-notes.txt
+
   DIR_FILE=$(basename ${META_ROOT}).done
 
   if [ ! -f conf/${DIR_FILE} ]; then
