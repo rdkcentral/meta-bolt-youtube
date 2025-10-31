@@ -12,3 +12,5 @@ DEPENDS:remove = "virtual/vendor-gst-drm-plugins"
 CXXFLAGS:append = " -Wno-format-truncation"
 CXXFLAGS:append = " -Wno-unused-result"
 CXXFLAGS:append = " -Wno-stringop-truncation"
+
+DISTRO_FEATURES:append = " opencdm"
