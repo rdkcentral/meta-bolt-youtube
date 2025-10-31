@@ -20,14 +20,17 @@
 test -f .env && source $_
 
 META_ROOT=$(readlink -m "$(dirname "${BASH_SOURCE[0]}")")
+SETUP_SCRIPT=deps/bolt/setup-environment
 
-if [ ! -d deps ]; then
+if [ ! -f ${SETUP_SCRIPT} ]; then
   ${META_ROOT}/repo-sync
 fi
 
-source deps/bolt/setup-environment
+if [ -f ${SETUP_SCRIPT} ]; then
+  source ${SETUP_SCRIPT}
+fi
 
-if [ "$(pwd)" = "$(readlink -m $BUILDDIR)" ]; then
+if [[ -n "${BUILDDIR}" && "$(pwd)" == "$(readlink -m ${BUILDDIR})" ]]; then
   DIR_FILE=$(basename ${META_ROOT}).done
 
   if [ ! -f conf/${DIR_FILE} ]; then
