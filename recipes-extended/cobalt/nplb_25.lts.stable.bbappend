@@ -5,4 +5,4 @@ do_install:append() {
   install -m 0555 ${WORKDIR}/nplb-test ${D}${bindir}
 }
 
-FILES:${PN}  += "${bindir}/nplb-test"
+FILES:${PN}  += "${bindir}"
