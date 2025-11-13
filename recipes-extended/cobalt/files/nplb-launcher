@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 export LANG=en-US
 export TZ=:Europe/Warsaw
@@ -6,6 +6,4 @@ export TZ=:Europe/Warsaw
 export COBALT_ENABLE_OVERRIDES=1
 export DeviceIdentification_deviceidentification='{"firmwareversion":"1.0.0","chipset":"S905X4"}'
 
-#export THUNDER_ACCESS=127.0.0.1:9998
-
-elf_loader_sandbox --evergreen_library=app/nplb/lib/libnplb.so --evergreen_content=app/nplb/content
+elf_loader_sandbox --evergreen_library=app/nplb/lib/libnplb.so --evergreen_content=app/nplb/content --gtest_output="xml:nplb.xml"
