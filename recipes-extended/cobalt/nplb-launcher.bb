@@ -11,4 +11,4 @@ do_install() {
   install -m 0555 ${WORKDIR}/nplb-launcher ${D}${bindir}
 }
 
-FILES:${PN} = "${bindir}"
+FILES:${PN} = "${bindir}/nplb-launcher"
