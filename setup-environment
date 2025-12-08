@@ -19,24 +19,17 @@
 
 test -f .env && source $_
 
-META_ROOT=$(readlink -m "$(dirname "${BASH_SOURCE[0]}")")
-SETUP_SCRIPT=deps/bolt/setup-environment
+BOLT_LAYER_SETUP_SCRIPT=$(realpath -se "${BASH_SOURCE[0]}")
+BOLT_SETUP_SCRIPT=deps/bolt/setup-environment
 
-if [ ! -f ${SETUP_SCRIPT} ]; then
-  ${META_ROOT}/repo-sync
+if [ ! -f ${BOLT_SETUP_SCRIPT} ]; then
+  "${BOLT_LAYER_SETUP_SCRIPT%/*}/repo-sync"
 fi
 
-if [ -f ${SETUP_SCRIPT} ]; then
-  source ${SETUP_SCRIPT}
+if [ -f ${BOLT_SETUP_SCRIPT} ]; then
+  source ${BOLT_SETUP_SCRIPT}
+  bolt_layer_setup "${BOLT_LAYER_SETUP_SCRIPT%/*}"
 fi
 
-if [[ -n "${BUILDDIR}" && "$(pwd)" == "$(readlink -m ${BUILDDIR})" ]]; then
-  cat ${META_ROOT}/conf/conf-notes.txt
-
-  DIR_FILE=$(basename ${META_ROOT}).done
-
-  if [ ! -f conf/${DIR_FILE} ]; then
-    echo "BBLAYERS:append = \" ${META_ROOT}\"" >> conf/bblayers.conf
-    echo ${META_ROOT} > conf/${DIR_FILE}
-  fi
-fi
+unset BOLT_SETUP_SCRIPT
+unset BOLT_LAYER_SETUP_SCRIPT
