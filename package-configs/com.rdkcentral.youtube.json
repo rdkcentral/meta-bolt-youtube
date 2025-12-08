@@ -1,0 +1,15 @@
+{
+  "id": "com.rdkcentral.youtube",
+  "version": "0.0.3",
+  "versionName": "develop",
+  "name": "YouTube",
+  "packageType": "application",
+  "entryPoint": " ",
+  "dependencies": {
+    "com.rdkcentral.cobalt": "0.0.3"
+  },
+  "permissions": [
+  ],
+  "configuration": {
+  }
+}
