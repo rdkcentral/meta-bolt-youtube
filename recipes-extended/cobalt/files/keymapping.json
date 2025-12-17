@@ -1,0 +1,28 @@
+{
+  "keymappings": [
+    {
+      "keycode": 191,
+      "mapped": {
+        "keycode": 358
+      }
+    },
+    {
+      "keycode": 104,
+      "mapped": {
+        "keycode": 402
+      }
+    },
+    {
+      "keycode": 109,
+      "mapped": {
+        "keycode": 403
+      }
+    },
+    {
+      "keycode": 14,
+      "mapped": {
+        "keycode": 1
+      }
+    }
+  ]
+}
