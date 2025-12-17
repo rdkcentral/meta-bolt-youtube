@@ -7,5 +7,5 @@
   <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.4.1" path="meta-rdk-auxiliary"/>
   <project remote="rdkcentral" name="meta-rdk-oss-reference" upstream="main" revision="refs/tags/4.7.7" path="meta-rdk-oss-reference"/>
 
-  <project remote="rdkcentral" name="meta-bolt-distro" upstream="develop" revision="75226705244680adc63b0173419a2928a1919183" path="bolt"/>
+  <project remote="rdkcentral" name="meta-bolt-distro" upstream="main" revision="refs/tags/0.1.0" path="bolt"/>
 </manifest>

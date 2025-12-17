@@ -1,6 +1,6 @@
 {
   "id": "com.rdkcentral.cobalt.nplb",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "versionName": "develop",
   "name": "Cobalt NPLB",
   "packageType": "application",
@@ -9,6 +9,10 @@
     "com.rdkcentral.base": "0.1.0"
   },
   "permissions": [
+    "urn:rdk:permission:internet",
+    "urn:rdk:permission:firebolt",
+    "urn:rdk:permission:thunder",
+    "urn:rdk:permission:rialto"
   ],
   "configuration": {
   }
