@@ -9,6 +9,10 @@
     "com.rdkcentral.cobalt": "0.1.0"
   },
   "permissions": [
+    "urn:rdk:permission:internet",
+    "urn:rdk:permission:firebolt",
+    "urn:rdk:permission:thunder",
+    "urn:rdk:permission:rialto"
   ],
   "configuration": {
   }
