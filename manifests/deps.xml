@@ -1,11 +1,11 @@
 <manifest>
   <remote name="rdkcentral" fetch="https://github.com/rdkcentral/"/>
 
-<!-- Q3 release -->
-  <project remote="rdkcentral" name="meta-rdk" upstream="main" revision="refs/tags/1.11.0" path="meta-rdk"/>
-  <project remote="rdkcentral" name="meta-rdk-video" upstream="main" revision="refs/tags/1.11.0-community" path="meta-rdk-video"/>
-  <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.4.1" path="meta-rdk-auxiliary"/>
-  <project remote="rdkcentral" name="meta-rdk-oss-reference" upstream="main" revision="refs/tags/4.7.7" path="meta-rdk-oss-reference"/>
+<!-- Q4 release -->
+  <project remote="rdkcentral" name="meta-rdk" upstream="main" revision="refs/tags/1.14.0" path="meta-rdk"/>
+  <project remote="rdkcentral" name="meta-rdk-video" upstream="main" revision="refs/tags/1.14.0" path="meta-rdk-video"/>
+  <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.6.0" path="meta-rdk-auxiliary"/>
+  <project remote="rdkcentral" name="meta-rdk-oss-reference" upstream="main" revision="refs/tags/4.9.0" path="meta-rdk-oss-reference"/>
 
-  <project remote="rdkcentral" name="meta-bolt-distro" upstream="main" revision="refs/tags/0.1.0" path="bolt"/>
+  <project remote="rdkcentral" name="meta-bolt-distro" upstream="develop" revision="c712c0b6bf9d947f1e7185b063ae993e36844c4d" path="bolt"/>
 </manifest>
