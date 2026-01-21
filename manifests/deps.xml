@@ -1,7 +1,7 @@
 <manifest>
   <remote name="rdkcentral" fetch="https://github.com/rdkcentral/"/>
 
-<!-- Q3 release -->
+<!-- Q4 release -->
   <project remote="rdkcentral" name="meta-rdk" upstream="main" revision="refs/tags/1.14.0" path="meta-rdk"/>
   <project remote="rdkcentral" name="meta-rdk-video" upstream="main" revision="refs/tags/1.14.0" path="meta-rdk-video"/>
   <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.6.0" path="meta-rdk-auxiliary"/>
