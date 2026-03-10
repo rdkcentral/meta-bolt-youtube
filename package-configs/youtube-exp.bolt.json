@@ -1,6 +1,6 @@
 {
   "config": "com.rdkcentral.youtube-exp.json",
   "bitbake": {
-    "image": "cobalt-exp-bolt-image"
+    "image": "cobalt27-bolt-image"
   }
 }

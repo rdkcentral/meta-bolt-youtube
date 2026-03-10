@@ -1,0 +1,29 @@
+From 48a864734c6533081128fda23b9dc4420d631b45 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Fri, 8 May 2026 16:35:10 +0200
+Subject: [PATCH 12/12] RDKEAPPRT-762 Hard-code model properties for
+ certification
+
+---
+ src/third_party/starboard/rdk/arm/configuration_public.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/third_party/starboard/rdk/arm/configuration_public.h b/src/third_party/starboard/rdk/arm/configuration_public.h
+index 98cee42..17cdf08 100644
+--- a/src/third_party/starboard/rdk/arm/configuration_public.h
++++ b/src/third_party/starboard/rdk/arm/configuration_public.h
+@@ -302,9 +302,9 @@
+ #endif
+ 
+ #define SB_PLATFORM_FRIENDLY_NAME "RDK"
+-#define SB_PLATFORM_OPERATOR_NAME "Unknown"
++#define SB_PLATFORM_OPERATOR_NAME "Broadcom"
+ #define SB_PLATFORM_MODEL_YEAR 2021
+-#define SB_PLATFORM_MODEL_NAME "RDKReference"
++#define SB_PLATFORM_MODEL_NAME "74116"
+ #define SB_PLATFORM_FIRMWARE_VERSION_STRING "1.0.0"
+ 
+ #endif  // THIRD_PARTY_STARBOARD_RDK_ARM_CONFIGURATION_PUBLIC_H_
+-- 
+2.25.1
+

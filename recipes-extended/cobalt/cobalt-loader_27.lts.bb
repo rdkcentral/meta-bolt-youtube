@@ -25,6 +25,7 @@ SRCREV_larboard:develop = "${AUTOREV}"
 SRC_URI  = "git://github.com/youtube/cobalt.git;protocol=https;name=cobalt;branch=${COBALT_BRANCH};destsuffix=chromium/src"
 SRC_URI += "${LARBOARD_SRC_URI};protocol=${CMF_GITHUB_PROTOCOL};destsuffix=larboard;name=larboard;branch=${LARBOARD_BRANCH}"
 SRC_URI += "${COBALT_PATCHES}"
+SRC_URI += "${LARBOARD_PATCHES}"
 
 COBALT_PATCHES = "file://27/0001-Include-RDK-platforms.patch"
 COBALT_PATCHES:in-tree = " \
@@ -34,6 +35,20 @@ COBALT_PATCHES:in-tree = " \
     file://27/0004-Let-args-configure-the-loader-app-target-type.patch \
     file://27/0005-Fix-namespaces-in-firebolt_interface.cc.patch \
     file://27/0006-Fix-libcobalt.cc-build-without-rdkservices-API.patch \
+"
+
+LARBOARD_PATCHES = " \
+    file://27/exp/0002-Prepare-kSbSystemPropertyPlatformName-from-Firebolt-.patch;patchdir=../../larboard \
+    file://27/exp/0003-Return-integrator-name-and-model-year-from-environme.patch;patchdir=../../larboard \
+    file://27/exp/0004-Set-TZ-from-Firebolt-Localization.timeZone.patch;patchdir=../../larboard \
+    file://27/exp/0005-Set-LANG-from-Firebolt-Localization.presentationLang.patch;patchdir=../../larboard \
+    file://27/exp/0006-Implement-FireboltDevice-firmware_version-with-Devic.patch;patchdir=../../larboard \
+    file://27/exp/0007-Implement-FireboltDevice-video_resolution-and-diagon.patch;patchdir=../../larboard \
+    file://27/exp/0008-Implement-FireboltDevice-is_disconnected-with-Networ.patch;patchdir=../../larboard \
+    file://27/exp/0009-Add-Firebolt-lifecycle-support.patch;patchdir=../../larboard \
+    file://27/exp/0010-RDKEAPPRT-762-Add-reading-of-cert-scope-and-secret-k.patch;patchdir=../../larboard \
+    file://27/exp/0011-RDKEAPPRT-615-Add-experimental-DIAL-support.patch;patchdir=../../larboard \
+    file://27/exp/0012-RDKEAPPRT-762-Hard-code-model-properties-for-certifi.patch;patchdir=../../larboard \
 "
 
 SRCREV_FORMAT = "cobalt_larboard"

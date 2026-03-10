@@ -2,7 +2,7 @@ SUMMARY = "Cobalt27 bolt image"
 
 inherit base-bolt-image
 
-IMAGE_INSTALL += "loader-app"
+IMAGE_INSTALL += "cobalt-loader"
 IMAGE_INSTALL += "cobalt-keymap"
 IMAGE_INSTALL += "rialto-gstreamer"
 IMAGE_INSTALL += "gstreamer1.0-plugins-base-audioresample"

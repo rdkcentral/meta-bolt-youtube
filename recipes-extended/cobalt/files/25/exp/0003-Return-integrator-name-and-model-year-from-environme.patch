@@ -1,0 +1,41 @@
+From 9e1e62080ecfdef027e138966be3eb9ad6ef928a Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Tue, 6 Oct 2026 18:34:48 +0000
+Subject: [PATCH 03/12] Return integrator name and model year from environment
+
+Set:
+- kSbSystemPropertySystemIntegratorName from COBALT_INTEGRATOR_NAME
+- kSbSystemPropertyModelYear from COBALT_MODEL_YEAR
+---
+ .../starboard/rdk/shared/system/system_get_property.cc    | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/system/system_get_property.cc b/src/third_party/starboard/rdk/shared/system/system_get_property.cc
+index 19b7784..99c6e67 100644
+--- a/src/third_party/starboard/rdk/shared/system/system_get_property.cc
++++ b/src/third_party/starboard/rdk/shared/system/system_get_property.cc
+@@ -79,6 +79,10 @@ bool GetModelYear(char* out_value, int value_length) {
+     return CopyStringAndTestIfSuccess(out_value, value_length, prop.c_str());
+   }
+ 
++  if (const char* env = std::getenv("COBALT_MODEL_YEAR"); !!env) {
++    return CopyStringAndTestIfSuccess(out_value, value_length, env);
++  }
++
+ #if defined(SB_PLATFORM_MODEL_YEAR)
+   return CopyStringAndTestIfSuccess(out_value, value_length,
+     std::to_string(SB_PLATFORM_MODEL_YEAR).c_str());
+@@ -122,6 +126,10 @@ bool GetManufacturerName(char* out_value, int value_length) {
+     return CopyStringAndTestIfSuccess(out_value, value_length, prop.c_str());
+   }
+ 
++  if (const char* env = std::getenv("COBALT_INTEGRATOR_NAME"); !!env) {
++    return CopyStringAndTestIfSuccess(out_value, value_length, env);
++  }
++
+   if (const char* env = std::getenv("COBALT_MANUFACTURE_NAME"); !!env) {
+     return CopyStringAndTestIfSuccess(out_value, value_length, env);
+   }
+-- 
+2.43.0
+

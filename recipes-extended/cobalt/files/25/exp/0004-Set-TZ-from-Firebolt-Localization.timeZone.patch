@@ -1,0 +1,61 @@
+From 35e0e933399882e80cd24d063175e71fdc315223 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Tue, 6 Oct 2026 17:58:15 +0000
+Subject: [PATCH 04/12] Set TZ from Firebolt Localization.timeZone
+
+When the TZ environment variable is not defined, read Localization.timeZone,
+and set TZ to it.
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index 69e6fc8..5ec332d 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -29,6 +29,8 @@
+ 
+ #include <chrono>
+ #include <cstring>
++#include <cstdlib>
++#include <ctime>
+ 
+ using namespace std::chrono_literals;
+ using starboard::shared::starboard::media::MimeSupportabilityCache;
+@@ -66,6 +68,25 @@ std::ostream& operator<<(std::ostream& out, const Firebolt::Error& e) {
+   return out << to_string(e) << '(' << static_cast<int32_t>(e) << ')';
+ }
+ 
++void SetTimeZoneFromFirebolt() {
++  if (const char* tz = getenv("TZ"); tz != nullptr) {
++    SB_LOG(INFO) << "TZ is already set to: '" << tz << "'";
++    return;
++  }
++
++  auto time_zone = Firebolt::IFireboltAccessor::Instance().LocalizationInterface().timeZone();
++  if (!time_zone) {
++    SB_LOG(ERROR) << "localization.timeZone() failed, error code = " << time_zone.error();
++    return;
++  }
++  if (time_zone->empty()) {
++    return;
++  }
++  SB_LOG(INFO) << "localization.timeZone(): " << *time_zone;
++  setenv("TZ", (":" + *time_zone).c_str(), 1);
++  tzset();
++}
++
+ } // namespace
+ 
+ // FireboltDevice
+@@ -623,6 +644,7 @@ void FireboltInterface::lazy_init() {
+     const auto connected_tp = std::chrono::steady_clock::now();
+     device_.init();
+     text_to_speech_.init();
++    SetTimeZoneFromFirebolt();
+     if (cfg.legacyRPCv1) {
+       // Let gateway know we're ready to receive notifications
+       auto& gateway = Firebolt::Transport::GetGatewayInstance();
+-- 
+2.43.0
+

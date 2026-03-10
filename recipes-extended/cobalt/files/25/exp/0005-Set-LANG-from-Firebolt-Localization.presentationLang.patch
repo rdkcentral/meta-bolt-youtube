@@ -1,0 +1,60 @@
+From 285780a5946ceded3e01bc8ddca993e20e77a4eb Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Sun, 11 Oct 2026 15:48:03 +0200
+Subject: [PATCH 05/12] Set LANG from Firebolt
+ Localization.presentationLanguage
+
+When LC_ALL, LC_MESSAGES and LANG environment variables are not defined,
+set LANG from Localization.presentationLanguage.
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index 5ec332d..fea114e 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -87,6 +87,32 @@ void SetTimeZoneFromFirebolt() {
+   tzset();
+ }
+ 
++bool IsLocaleEnvSet(const char* name) {
++  if (const char* value = getenv(name); value != nullptr) {
++    SB_LOG(INFO) << name << " is already set to: '" << value << "'";
++    return true;
++  }
++
++  return false;
++}
++
++void SetLocaleFromFirebolt() {
++  if (IsLocaleEnvSet("LC_ALL") || IsLocaleEnvSet("LC_MESSAGES") || IsLocaleEnvSet("LANG")) {
++    return;
++  }
++
++  auto language = Firebolt::IFireboltAccessor::Instance().LocalizationInterface().presentationLanguage();
++  if (!language) {
++    SB_LOG(ERROR) << "localization.presentationLanguage() failed, error code = " << language.error();
++    return;
++  }
++  if (language->empty()) {
++    return;
++  }
++  SB_LOG(INFO) << "localization.presentationLanguage(): " << *language;
++  setenv("LANG", language->c_str(), 1);
++}
++
+ } // namespace
+ 
+ // FireboltDevice
+@@ -645,6 +671,7 @@ void FireboltInterface::lazy_init() {
+     device_.init();
+     text_to_speech_.init();
+     SetTimeZoneFromFirebolt();
++    SetLocaleFromFirebolt();
+     if (cfg.legacyRPCv1) {
+       // Let gateway know we're ready to receive notifications
+       auto& gateway = Firebolt::Transport::GetGatewayInstance();
+-- 
+2.43.0
+

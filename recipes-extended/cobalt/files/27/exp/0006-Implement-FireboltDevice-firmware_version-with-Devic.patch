@@ -1,0 +1,53 @@
+From 1183f83888a43cd20235e95e7dd9300d790ba360 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Tue, 6 Oct 2026 17:56:19 +0000
+Subject: [PATCH 06/12] Implement FireboltDevice::firmware_version() with
+ Device.firmware
+
+---
+ .../starboard/rdk/shared/platform/firebolt_interface.cc  | 9 ++++++++-
+ .../starboard/rdk/shared/platform/firebolt_interface.h   | 1 +
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index b69854a..f638097 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -196,7 +196,7 @@ std::optional<std::string> FireboltInterface::FireboltDevice::device_type() {
+ }
+ 
+ std::optional<std::string> FireboltInterface::FireboltDevice::firmware_version() {
+-  return {};
++  return firmware_version_;
+ }
+ 
+ std::optional<std::string> FireboltInterface::FireboltDevice::os_name() {
+@@ -245,6 +245,13 @@ void FireboltInterface::FireboltDevice::init() {
+     chipset_id_ = *chipset_id;
+   }
+ 
++  auto firmware = device.firmware();
++  if (!firmware) {
++    SB_LOG(ERROR) << "device.firmware() failed, error code = " << firmware.error();
++  } else if (!firmware->empty()) {
++    firmware_version_ = *firmware;
++  }
++
+   auto os_name = device.osName();
+   if (!os_name) {
+     SB_LOG(ERROR) << "device.osName() failed, error code = " << os_name.error();
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+index a5fc76d..5d9ea86 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+@@ -56,6 +56,7 @@ private:
+     std::mutex mutex_;
+     std::optional<std::string> device_type_;
+     std::optional<std::string> chipset_id_;
++    std::optional<std::string> firmware_version_;
+     std::optional<std::string> os_name_;
+     std::optional<std::string> os_version_;
+     std::optional<HDRFormat> hdr_format_;
+-- 
+2.25.1
+
