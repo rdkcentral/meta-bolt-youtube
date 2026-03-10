@@ -1,0 +1,33 @@
+From 51c51b7d67f9fa8cb87d4591209790e0499731b6 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Wed, 1 Jul 2026 13:52:06 +0200
+Subject: [PATCH 08/12] Implement FireboltDevice::is_disconnected() with
+ Network.connected
+
+---
+ .../starboard/rdk/shared/platform/firebolt_interface.cc  | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index 3352ba0..3e51e57 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -315,6 +315,15 @@ std::optional<bool> FireboltInterface::FireboltDevice::is_connection_type_wirele
+ }
+ 
+ std::optional<bool> FireboltInterface::FireboltDevice::is_disconnected() {
++  auto &network = Firebolt::IFireboltAccessor::Instance().NetworkInterface();
++  auto connected = network.connected();
++
++  if (!connected) {
++    SB_LOG(ERROR) << "network.connected() failed, error code = " << connected.error();
++  } else {
++    return !connected.value();
++  }
++
+   return {};
+ }
+ 
+-- 
+2.43.0
+

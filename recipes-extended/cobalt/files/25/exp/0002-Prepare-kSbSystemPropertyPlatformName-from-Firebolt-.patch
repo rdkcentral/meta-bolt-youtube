@@ -1,0 +1,202 @@
+From 876a915ff1e99022ca6cae8426e4ad19d1dbae09 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Sun, 11 Oct 2026 15:17:34 +0200
+Subject: [PATCH 02/12] Prepare kSbSystemPropertyPlatformName from Firebolt
+ osName and osVersion
+
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 22 +++++++++++++++++
+ .../rdk/shared/platform/firebolt_interface.h  |  4 ++++
+ .../rdk/shared/platform/platform_interface.cc | 24 +++++++++++++++++++
+ .../rdk/shared/platform/platform_interface.h  |  6 +++++
+ .../starboard/rdk/shared/rdkservices.cc       |  8 +++++++
+ .../starboard/rdk/shared/rdkservices.h        |  2 ++
+ .../rdk/shared/system/system_get_property.cc  | 12 +++++++++-
+ 7 files changed, 77 insertions(+), 1 deletion(-)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index af2edb6..69e6fc8 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -152,6 +152,14 @@ std::optional<std::string> FireboltInterface::FireboltDevice::firmware_version()
+   return {};
+ }
+ 
++std::optional<std::string> FireboltInterface::FireboltDevice::os_name() {
++  return os_name_;
++}
++
++std::optional<std::string> FireboltInterface::FireboltDevice::os_version() {
++  return os_version_;
++}
++
+ std::optional<bool> FireboltInterface::FireboltDevice::is_connection_type_wireless() {
+   return {};
+ }
+@@ -189,6 +197,20 @@ void FireboltInterface::FireboltDevice::init() {
+   } else {
+     chipset_id_ = *chipset_id;
+   }
++
++  auto os_name = device.osName();
++  if (!os_name) {
++    SB_LOG(ERROR) << "device.osName() failed, error code = " << os_name.error();
++  } else if (!os_name->empty()) {
++    os_name_ = *os_name;
++  }
++
++  auto os_version = device.osVersion();
++  if (!os_version) {
++    SB_LOG(ERROR) << "device.osVersion() failed, error code = " << os_version.error();
++  } else if (!os_version->empty()) {
++    os_version_ = *os_version;
++  }
+ }
+ 
+ void FireboltInterface::FireboltDevice::unsubscribe() {
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+index abb85d1..a5fc76d 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+@@ -43,6 +43,8 @@ private:
+     std::optional<std::string> chipset() override;
+     std::optional<std::string> device_type() override;
+     std::optional<std::string> firmware_version() override;
++    std::optional<std::string> os_name() override;
++    std::optional<std::string> os_version() override;
+     std::optional<bool> is_connection_type_wireless() override;
+     std::optional<bool> is_disconnected() override;
+ 
+@@ -54,6 +56,8 @@ private:
+     std::mutex mutex_;
+     std::optional<std::string> device_type_;
+     std::optional<std::string> chipset_id_;
++    std::optional<std::string> os_name_;
++    std::optional<std::string> os_version_;
+     std::optional<HDRFormat> hdr_format_;
+     std::optional<uint64_t> on_hdr_format_changed_id_;
+   };
+diff --git a/src/third_party/starboard/rdk/shared/platform/platform_interface.cc b/src/third_party/starboard/rdk/shared/platform/platform_interface.cc
+index f1ce6e9..21e2803 100644
+--- a/src/third_party/starboard/rdk/shared/platform/platform_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/platform_interface.cc
+@@ -153,6 +153,18 @@ class TracePlatformInterface final : public PlatformInterface {
+       return ret;
+     }
+ 
++    std::optional<std::string> os_name() override {
++      auto ret = device_.os_name();
++      TRACE_INFO() << "device.os_name: " << ret;
++      return ret;
++    }
++
++    std::optional<std::string> os_version() override {
++      auto ret = device_.os_version();
++      TRACE_INFO() << "device.os_version: " << ret;
++      return ret;
++    }
++
+     std::optional<bool> is_connection_type_wireless() override {
+       auto ret = device_.is_connection_type_wireless();
+       TRACE_INFO() << "device.is_connection_type_wireless: " << ret;
+@@ -302,6 +314,18 @@ class CompositeInterface final : public PlatformInterface {
+       });
+     }
+ 
++    std::optional<std::string> os_name() override {
++      return parent_.forAnyDevice<std::string>([](IDevice& device) {
++        return device.os_name();
++      });
++    }
++
++    std::optional<std::string> os_version() override {
++      return parent_.forAnyDevice<std::string>([](IDevice& device) {
++        return device.os_version();
++      });
++    }
++
+     std::optional<bool> is_connection_type_wireless() override {
+       return parent_.forAnyDevice<bool>([](IDevice& device) {
+         return device.is_connection_type_wireless();
+diff --git a/src/third_party/starboard/rdk/shared/platform/platform_interface.h b/src/third_party/starboard/rdk/shared/platform/platform_interface.h
+index 5ec012d..3b6c71a 100644
+--- a/src/third_party/starboard/rdk/shared/platform/platform_interface.h
++++ b/src/third_party/starboard/rdk/shared/platform/platform_interface.h
+@@ -76,6 +76,12 @@ public:
+   // Get the firmware version of the device.
+   virtual std::optional<std::string> firmware_version() = 0;
+ 
++  // Get the OS name of the device.
++  virtual std::optional<std::string> os_name() = 0;
++
++  // Get the OS version of the device.
++  virtual std::optional<std::string> os_version() = 0;
++
+   // Check if the device has a wireless connection.
+   virtual std::optional<bool> is_connection_type_wireless() = 0;
+ 
+diff --git a/src/third_party/starboard/rdk/shared/rdkservices.cc b/src/third_party/starboard/rdk/shared/rdkservices.cc
+index 1ba052e..fb57694 100644
+--- a/src/third_party/starboard/rdk/shared/rdkservices.cc
++++ b/src/third_party/starboard/rdk/shared/rdkservices.cc
+@@ -1643,6 +1643,14 @@ std::optional<std::string> RDKServicesInterface::RDKDevice::firmware_version() {
+   return GetDeviceInfo()->GetFirmwareVersion();
+ }
+ 
++std::optional<std::string> RDKServicesInterface::RDKDevice::os_name() {
++  return {};
++}
++
++std::optional<std::string> RDKServicesInterface::RDKDevice::os_version() {
++  return {};
++}
++
+ std::optional<bool> RDKServicesInterface::RDKDevice::is_connection_type_wireless() {
+   return GetNetworkInfo()->IsConnectionTypeWireless();
+ }
+diff --git a/src/third_party/starboard/rdk/shared/rdkservices.h b/src/third_party/starboard/rdk/shared/rdkservices.h
+index 6810a9a..50551a6 100644
+--- a/src/third_party/starboard/rdk/shared/rdkservices.h
++++ b/src/third_party/starboard/rdk/shared/rdkservices.h
+@@ -47,6 +47,8 @@ private:
+     std::optional<std::string> chipset() override;
+     std::optional<std::string> device_type() override;
+     std::optional<std::string> firmware_version() override;
++    std::optional<std::string> os_name() override;
++    std::optional<std::string> os_version() override;
+     std::optional<bool> is_connection_type_wireless() override;
+     std::optional<bool> is_disconnected() override;
+   };
+diff --git a/src/third_party/starboard/rdk/shared/system/system_get_property.cc b/src/third_party/starboard/rdk/shared/system/system_get_property.cc
+index 7be859d..19b7784 100644
+--- a/src/third_party/starboard/rdk/shared/system/system_get_property.cc
++++ b/src/third_party/starboard/rdk/shared/system/system_get_property.cc
+@@ -158,6 +158,16 @@ bool GetFirmwareVersion(char* out_value, int value_length) {
+   return false;
+ }
+ 
++bool GetPlatformName(char* out_value, int value_length) {
++  std::string platform_name = platform::device().os_name().value_or(kPlatformName);
++  if (auto os_version = platform::device().os_version(); os_version.has_value()) {
++    platform_name += ';';
++    platform_name += *os_version;
++  }
++
++  return CopyStringAndTestIfSuccess(out_value, value_length, platform_name.c_str());
++}
++
+ bool GetCertificationScope(char* out_value, int value_length) {
+   const char *cert_scope_file_name = std::getenv("COBALT_CERT_SCOPE_FILE_NAME");
+   if ( cert_scope_file_name == nullptr )
+@@ -266,7 +276,7 @@ bool SbSystemGetProperty(SbSystemPropertyId property_id,
+       return GetFriendlyName(out_value, value_length);
+ 
+     case kSbSystemPropertyPlatformName:
+-      return CopyStringAndTestIfSuccess(out_value, value_length, kPlatformName);
++      return GetPlatformName(out_value, value_length);
+ 
+     case kSbSystemPropertyCertificationScope:
+       return GetCertificationScope(out_value, value_length);
+-- 
+2.43.0
+

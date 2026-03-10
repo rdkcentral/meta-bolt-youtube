@@ -15,5 +15,9 @@
     "urn:rdk:permission:rialto"
   ],
   "configuration": {
+    "urn:rdk:config:env": {
+      "COBALT_INTEGRATOR_NAME": "RDKCommonPort",
+      "COBALT_MODEL_YEAR": "2026"
+    }
   }
 }

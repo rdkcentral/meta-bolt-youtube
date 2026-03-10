@@ -1,0 +1,190 @@
+From 47b32486e0db32fc946c7d3b3079924af1937e19 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Wed, 1 Jul 2026 13:52:06 +0200
+Subject: [PATCH 07/12] Implement FireboltDevice video_resolution and
+ diagonal_size_in_inches
+
+This implements FireboltDevice functions:
+- video_resolution()
+- diagonal_size_in_inches()
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 116 +++++++++++++++++-
+ .../rdk/shared/platform/firebolt_interface.h  |   6 +
+ 2 files changed, 121 insertions(+), 1 deletion(-)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index c5c5781..3352ba0 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -29,6 +29,7 @@
+ 
+ #include <chrono>
+ #include <cstring>
++#include <cmath>
+ #include <cstdlib>
+ #include <ctime>
+ 
+@@ -117,10 +118,112 @@ void SetLocaleFromFirebolt() {
+ 
+ // FireboltDevice
+ std::optional<Resolution> FireboltInterface::FireboltDevice::video_resolution() {
++  std::unique_lock<std::mutex> lock { mutex_ };
++  if (!needs_video_resolution_refresh_) {
++    return video_resolution_;
++  }
++  needs_video_resolution_refresh_ = false;
++  const bool should_subscribe = !did_subscribe_video_resolution_;
++  did_subscribe_video_resolution_ = true;
++  lock.unlock();
++
++  std::optional<uint64_t> on_video_resolution_changed_id;
++  if (should_subscribe) {
++    auto &video_output = Firebolt::IFireboltAccessor::Instance().VideoOutputInterface();
++    auto subscribe_result = video_output.subscribeOnResolutionChanged(
++      [this](const Firebolt::VideoOutput::VideoOutputResolution& resolution) {
++        SB_LOG(INFO) << "videoOutput.resolutionChanged, resolution = "
++                     << resolution.width << 'x' << resolution.height;
++        on_video_resolution_changed();
++      });
++    if (!subscribe_result) {
++      SB_LOG(ERROR) << "videoOutput.subscribeOnResolutionChanged() failed, error code = "
++                    << subscribe_result.error() << ". Going to try again next time.";
++    } else {
++      on_video_resolution_changed_id = *subscribe_result;
++    }
++  }
++
++  auto resolution = query_video_resolution();
++
++  lock.lock();
++  if (should_subscribe) {
++    if (on_video_resolution_changed_id.has_value()) {
++      on_video_resolution_changed_id_ = on_video_resolution_changed_id;
++    } else {
++      did_subscribe_video_resolution_ = false;
++      needs_video_resolution_refresh_ = true;
++    }
++  }
++  video_resolution_ = resolution;
++  const bool should_retry = !resolution.has_value() && !needs_video_resolution_refresh_;
++  lock.unlock();
++
++  if (should_retry) {
++    SbEventSchedule([](void* data) {
++      auto* self = static_cast<FireboltDevice*>(data);
++      {
++        std::unique_lock<std::mutex> lock { self->mutex_ };
++        self->needs_video_resolution_refresh_ = true;
++      }
++      MimeSupportabilityCache::GetInstance()->ClearCachedMimeSupportabilities();
++      Application::Get()->DisplayInfoChanged();
++    }, this, std::chrono::duration_cast<std::chrono::microseconds>(1s).count());
++  }
++
++  return resolution;
++}
++
++std::optional<Resolution> FireboltInterface::FireboltDevice::query_video_resolution() {
++  auto &display = Firebolt::IFireboltAccessor::Instance().DisplayInterface();
++  auto max_resolution = display.maxResolution();
++  if (!max_resolution) {
++    SB_LOG(ERROR) << "display.maxResolution() failed, error code = " << max_resolution.error();
++  } else if (max_resolution->width > 0 && max_resolution->height > 0) {
++    return Resolution(static_cast<int32_t>(max_resolution->width),
++                      static_cast<int32_t>(max_resolution->height));
++  }
++
++  auto &video_output = Firebolt::IFireboltAccessor::Instance().VideoOutputInterface();
++  auto output_resolution = video_output.resolution();
++  if (!output_resolution) {
++    SB_LOG(ERROR) << "videoOutput.resolution() failed, error code = " << output_resolution.error();
++  } else if (output_resolution->width > 0 && output_resolution->height > 0) {
++    return Resolution(static_cast<int32_t>(output_resolution->width),
++                      static_cast<int32_t>(output_resolution->height));
++  }
++
+   return { };
+ }
+ 
++void FireboltInterface::FireboltDevice::on_video_resolution_changed() {
++  {
++    std::unique_lock<std::mutex> lock { mutex_ };
++    if (needs_video_resolution_refresh_) {
++      return;
++    }
++    needs_video_resolution_refresh_ = true;
++  }
++  if (Application::Get()) {
++    SbEventSchedule([](void* data) {
++      MimeSupportabilityCache::GetInstance()->ClearCachedMimeSupportabilities();
++      Application::Get()->DisplayInfoChanged();
++    }, nullptr, 0);
++  }
++}
++
+ std::optional<float> FireboltInterface::FireboltDevice::diagonal_size_in_inches() {
++  auto &display = Firebolt::IFireboltAccessor::Instance().DisplayInterface();
++  auto size = display.size();
++
++  if (!size) {
++    SB_LOG(ERROR) << "display.size() failed, error code = " << size.error();
++  } else {
++    const float width = static_cast<float>(size->width);
++    const float height = static_cast<float>(size->height);
++    return std::sqrt(width * width + height * height) / 2.54f;
++  }
++
+   return { };
+ }
+ 
+@@ -268,11 +371,22 @@ void FireboltInterface::FireboltDevice::init() {
+ }
+ 
+ void FireboltInterface::FireboltDevice::unsubscribe() {
+-  std::optional<uint64_t> on_hdr_format_changed_id;
++  std::optional<uint64_t> on_hdr_format_changed_id, on_video_resolution_changed_id;
+   {
+     std::unique_lock<std::mutex> lock { mutex_ };
+     on_hdr_format_changed_id = std::exchange(on_hdr_format_changed_id_, std::nullopt);
+     hdr_format_.reset();
++    on_video_resolution_changed_id = std::exchange(on_video_resolution_changed_id_, std::nullopt);
++    did_subscribe_video_resolution_ = false;
++    needs_video_resolution_refresh_ = true;
++    video_resolution_.reset();
++  }
++  if (on_video_resolution_changed_id.has_value()) {
++    auto &video_output = Firebolt::IFireboltAccessor::Instance().VideoOutputInterface();
++    auto result = video_output.unsubscribe(*on_video_resolution_changed_id);
++    if (!result) {
++      SB_LOG(ERROR) << "Failed to unsubscribe from OnResolutionChanged, error code = " << result.error();
++    }
+   }
+   auto &device = Firebolt::IFireboltAccessor::Instance().DeviceInterface();
+   if (on_hdr_format_changed_id.has_value()) {
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+index 5d9ea86..247e859 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+@@ -52,6 +52,8 @@ private:
+     void unsubscribe();
+   private:
+     void set_hdr_format(HDRFormat hdr_format);
++    void on_video_resolution_changed();
++    std::optional<Resolution> query_video_resolution();
+ 
+     std::mutex mutex_;
+     std::optional<std::string> device_type_;
+@@ -61,6 +63,10 @@ private:
+     std::optional<std::string> os_version_;
+     std::optional<HDRFormat> hdr_format_;
+     std::optional<uint64_t> on_hdr_format_changed_id_;
++    std::optional<Resolution> video_resolution_;
++    bool needs_video_resolution_refresh_ { true };
++    bool did_subscribe_video_resolution_ { false };
++    std::optional<uint64_t> on_video_resolution_changed_id_;
+   };
+ 
+   struct FireboltTextToSpeech final : public ITextToSpeech {
+-- 
+2.43.0
+
