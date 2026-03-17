@@ -1,9 +1,7 @@
 SUMMARY = "NPLB bolt image"
 
-inherit base-bolt-image
+require cobalt-common.inc
 
-IMAGE_INSTALL += "libloader-app"
-IMAGE_INSTALL += "cobalt-keymap"
 IMAGE_INSTALL += "nplb"
 IMAGE_INSTALL += "nplb-test-data"
 IMAGE_INSTALL += "nplb-launcher"
