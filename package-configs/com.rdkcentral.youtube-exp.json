@@ -1,12 +1,12 @@
 {
-  "id": "com.rdkcentral.youtube",
+  "id": "com.rdkcentral.youtube-exp",
   "version": "0.2.0",
   "versionName": "develop",
-  "name": "YouTube",
+  "name": "YouTube (experimental)",
   "packageType": "application",
-  "entryPoint": " ",
+  "entryPoint": "/usr/bin/loader_app",
   "dependencies": {
-    "com.rdkcentral.cobalt": "0.2.0"
+    "com.rdkcentral.base": "0.2.0"
   },
   "permissions": [
     "urn:rdk:permission:internet",
