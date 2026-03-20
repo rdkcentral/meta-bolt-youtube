@@ -4,9 +4,9 @@
   "versionName": "develop",
   "name": "YouTube (experimental)",
   "packageType": "application",
-  "entryPoint": " ",
+  "entryPoint": "/usr/bin/loader_app",
   "dependencies": {
-    "com.rdkcentral.cobalt": "0.1.0"
+    "com.rdkcentral.base": "0.2.0"
   },
   "permissions": [
     "urn:rdk:permission:internet",
