@@ -6,7 +6,7 @@
   "packageType": "application",
   "entryPoint": "/usr/bin/nplb-launcher",
   "dependencies": {
-    "com.rdkcentral.base": "0.1.0"
+    "com.rdkcentral.base": "0.2.0"
   },
   "permissions": [
     "urn:rdk:permission:internet",
