@@ -2,10 +2,10 @@
   <remote name="rdkcentral" fetch="https://github.com/rdkcentral/"/>
 
 <!-- 2026Q1 release -->
-  <project remote="rdkcentral" name="meta-rdk" upstream="develop" revision="248857542d7b0e379e59dec627179265b5207bf4" path="meta-rdk"/>
-  <project remote="rdkcentral" name="meta-rdk-video" upstream="develop" revision="7d4dd4175e1e19e8f1f2bc66b48b50ee989425f9" path="meta-rdk-video"/>
+  <project remote="rdkcentral" name="meta-rdk" upstream="main" revision="refs/tags/1.17.0" path="meta-rdk"/>
+  <project remote="rdkcentral" name="meta-rdk-video" upstream="main" revision="refs/tags/1.17.0" path="meta-rdk-video"/>
   <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.8.0" path="meta-rdk-auxiliary"/>
   <project remote="rdkcentral" name="meta-rdk-oss-reference" upstream="main" revision="refs/tags/4.12.0" path="meta-rdk-oss-reference"/>
 
-  <project remote="rdkcentral" name="meta-bolt-distro" upstream="main" revision="refs/tags/0.2.0" path="bolt"/>
+  <project remote="rdkcentral" name="meta-bolt-distro" upstream="develop" revision="caafe937b16a5e06b1de91fa1f731a6ef234ac6d" path="bolt"/>
 </manifest>
