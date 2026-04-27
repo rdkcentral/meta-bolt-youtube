@@ -1,0 +1,297 @@
+From 5b49da0d68ebde6293951687d2f20cacc040a592 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Fri, 17 Apr 2026 20:48:01 +0200
+Subject: [PATCH] RDKEAPPRT-615 Add experimental actions interface
+
+---
+ docs/openrpc/openrpc/actions.json | 75 +++++++++++++++++++++++++++++++
+ include/firebolt/actions.h        | 46 +++++++++++++++++++
+ include/firebolt/firebolt.h       |  8 ++++
+ src/actions_impl.cpp              | 32 +++++++++++++
+ src/actions_impl.h                | 29 ++++++++++++
+ src/firebolt.cpp                  |  5 +++
+ 6 files changed, 195 insertions(+)
+ create mode 100644 docs/openrpc/openrpc/actions.json
+ create mode 100644 include/firebolt/actions.h
+ create mode 100644 src/actions_impl.cpp
+ create mode 100644 src/actions_impl.h
+
+diff --git a/docs/openrpc/openrpc/actions.json b/docs/openrpc/openrpc/actions.json
+new file mode 100644
+index 0000000..4792630
+--- /dev/null
++++ b/docs/openrpc/openrpc/actions.json
+@@ -0,0 +1,75 @@
++{
++    "openrpc": "1.2.4",
++    "info": {
++        "title": "Actions",
++        "description": "Methods and events for delivering intents and actions to your app.",
++        "version": "0.0.0"
++    },
++    "methods": [
++        {
++            "name": "intent",
++            "summary": "Retrieve the last intent delivered to the calling application.",
++            "tags": [
++                {
++                    "name": "capabilities",
++                    "x-uses": [
++                        "xrn:firebolt:capability:cpp-client-only"
++                    ]
++                }
++            ],
++            "params": [],
++            "result": {
++                "name": "intent",
++                "summary": "The last known intent, or an empty string if none is set.",
++                "schema": {
++                    "type": "string"
++                }
++            },
++            "examples": [
++                {
++                    "name": "Default Example",
++                    "params": [],
++                    "result": {
++                        "name": "Default Result",
++                        "value": ""
++                    }
++                }
++            ]
++        },
++        {
++            "name": "onIntent",
++            "tags": [
++                {
++                    "name": "notifier",
++                    "x-contextual-parameters": 0
++                },
++                {
++                    "name": "capabilities",
++                    "x-uses": [
++                        "xrn:firebolt:capability:cpp-client-only"
++                    ]
++                }
++            ],
++            "summary": "Notification that the platform is delivering an intent to the app.",
++            "params": [
++                {
++                    "name": "intent",
++                    "schema": {
++                        "type": "string"
++                    }
++                }
++            ],
++            "examples": [
++                {
++                    "name": "Default Example",
++                    "params": [
++                        {
++                            "name": "intent",
++                            "value": "play-movie-id-42"
++                        }
++                    ]
++                }
++            ]
++        }
++    ]
++}
+diff --git a/include/firebolt/actions.h b/include/firebolt/actions.h
+new file mode 100644
+index 0000000..baafdd4
+--- /dev/null
++++ b/include/firebolt/actions.h
+@@ -0,0 +1,46 @@
++#pragma once
++
++#include <firebolt/types.h>
++#include <functional>
++#include <string>
++
++namespace Firebolt::Actions
++{
++class IActions
++{
++public:
++    virtual ~IActions() = default;
++
++    /**
++     * @brief Retrieve the last intent delivered to the calling application
++     *
++     * @retval The last known intent, or an empty string if none is set
++     */
++    virtual Result<std::string> intent() const = 0;
++
++    /**
++     * @brief Subscribe to intent events delivered to the calling application
++     *
++     * @param notification : The callback function, which receives the intent payload
++     *
++     * @retval The subscriptionId or error
++     */
++    virtual Result<SubscriptionId>
++    subscribeOnIntent(std::function<void(const std::string&)>&& notification) = 0;
++
++    /**
++     * @brief Remove subscriber from subscribers list. This method is generic for
++     *        all subscriptions
++     *
++     * @param[in] id : The subscription id
++     *
++     * @retval The status
++     */
++    virtual Result<void> unsubscribe(SubscriptionId id) = 0;
++
++    /**
++     * @brief Remove all active subscriptions from subscribers list.
++     */
++    virtual void unsubscribeAll() = 0;
++};
++} // namespace Firebolt::Actions
+diff --git a/include/firebolt/firebolt.h b/include/firebolt/firebolt.h
+index f51a7fd..1e06819 100644
+--- a/include/firebolt/firebolt.h
++++ b/include/firebolt/firebolt.h
+@@ -19,6 +19,7 @@
+ #pragma once
+ 
+ #include "firebolt/accessibility.h"
++#include "firebolt/actions.h"
+ #include "firebolt/advertising.h"
+ #include "firebolt/client_export.h"
+ #include "firebolt/device.h"
+@@ -85,6 +86,13 @@ public:
+      */
+     virtual Accessibility::IAccessibility& AccessibilityInterface() = 0;
+ 
++    /**
++     * @brief Returns instance of Actions interface
++     *
++     * @return Reference to Actions interface
++     */
++    virtual Actions::IActions& ActionsInterface() = 0;
++
+     /**
+      * @brief Returns instance of Advertising interface
+      *
+diff --git a/src/actions_impl.cpp b/src/actions_impl.cpp
+new file mode 100644
+index 0000000..3ce7a41
+--- /dev/null
++++ b/src/actions_impl.cpp
+@@ -0,0 +1,32 @@
++#include "actions_impl.h"
++#include <firebolt/json_types.h>
++
++namespace Firebolt::Actions
++{
++ActionsImpl::ActionsImpl(Firebolt::Helpers::IHelper& helper)
++    : helper_(helper),
++      subscriptionManager_(helper, this)
++{
++}
++
++Result<std::string> ActionsImpl::intent() const
++{
++    return helper_.get<Firebolt::JSON::String, std::string>("Actions.intent");
++}
++
++Result<SubscriptionId>
++ActionsImpl::subscribeOnIntent(std::function<void(const std::string&)>&& notification)
++{
++    return subscriptionManager_.subscribe<Firebolt::JSON::String>("Actions.onIntent", std::move(notification));
++}
++
++Result<void> ActionsImpl::unsubscribe(SubscriptionId id)
++{
++    return subscriptionManager_.unsubscribe(id);
++}
++
++void ActionsImpl::unsubscribeAll()
++{
++    subscriptionManager_.unsubscribeAll();
++}
++} // namespace Firebolt::Actions
+diff --git a/src/actions_impl.h b/src/actions_impl.h
+new file mode 100644
+index 0000000..24311ee
+--- /dev/null
++++ b/src/actions_impl.h
+@@ -0,0 +1,29 @@
++#pragma once
++
++#include "firebolt/actions.h"
++#include <firebolt/helpers.h>
++
++namespace Firebolt::Actions
++{
++class ActionsImpl : public IActions
++{
++public:
++    explicit ActionsImpl(Firebolt::Helpers::IHelper& helper);
++    ActionsImpl(const ActionsImpl&) = delete;
++    ActionsImpl& operator=(const ActionsImpl&) = delete;
++
++    ~ActionsImpl() override = default;
++
++    Result<std::string> intent() const override;
++
++    Result<SubscriptionId>
++    subscribeOnIntent(std::function<void(const std::string&)>&& notification) override;
++
++    Result<void> unsubscribe(SubscriptionId id) override;
++    void unsubscribeAll() override;
++
++private:
++    Firebolt::Helpers::IHelper& helper_;
++    Firebolt::Helpers::SubscriptionManager subscriptionManager_;
++};
++} // namespace Firebolt::Actions
+diff --git a/src/firebolt.cpp b/src/firebolt.cpp
+index ba0470c..fd93306 100644
+--- a/src/firebolt.cpp
++++ b/src/firebolt.cpp
+@@ -18,6 +18,7 @@
+ 
+ #include "firebolt/firebolt.h"
+ #include "accessibility_impl.h"
++#include "actions_impl.h"
+ #include "advertising_impl.h"
+ #include "device_impl.h"
+ #include "discovery_impl.h"
+@@ -39,6 +40,7 @@ class FireboltAccessorImpl : public IFireboltAccessor
+ public:
+     FireboltAccessorImpl()
+         : accessibility_(Firebolt::Helpers::GetHelperInstance()),
++          actions_(Firebolt::Helpers::GetHelperInstance()),
+           advertising_(Firebolt::Helpers::GetHelperInstance()),
+           device_(Firebolt::Helpers::GetHelperInstance()),
+           discovery_(Firebolt::Helpers::GetHelperInstance()),
+@@ -72,6 +74,7 @@ public:
+     }
+ 
+     Accessibility::IAccessibility& AccessibilityInterface() override { return accessibility_; }
++    Actions::IActions& ActionsInterface() override { return actions_; }
+     Advertising::IAdvertising& AdvertisingInterface() override { return advertising_; }
+     Device::IDevice& DeviceInterface() override { return device_; }
+     Discovery::IDiscovery& DiscoveryInterface() override { return discovery_; }
+@@ -88,6 +91,7 @@ private:
+     void unsubscribeAll()
+     {
+         accessibility_.unsubscribeAll();
++        actions_.unsubscribeAll();
+         lifecycle_.unsubscribeAll();
+         localization_.unsubscribeAll();
+         network_.unsubscribeAll();
+@@ -97,6 +101,7 @@ private:
+ 
+ private:
+     Accessibility::AccessibilityImpl accessibility_;
++    Actions::ActionsImpl actions_;
+     Advertising::AdvertisingImpl advertising_;
+     Device::DeviceImpl device_;
+     Discovery::DiscoveryImpl discovery_;
+-- 
+2.43.0
+
