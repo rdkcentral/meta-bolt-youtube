@@ -1,0 +1,60 @@
+From 3b03bd77c1bc74b66b1b73ceaafa797ad00f4327 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Mon, 27 Apr 2026 14:14:45 +0200
+Subject: [PATCH] RDKEAPPRT-615 Add experimental DIAL support
+
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 23 +++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index 491431f..101a379 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -191,6 +191,13 @@ class FireboltInterface::FireboltLifecycle {
+       }
+     }
+ 
++    static void handleIntent(const std::string& intent) {
++      if (intent != "null") {
++        SB_LOG(INFO) << "received intent = " << intent;
++        Application::Get()->Link(intent.c_str());
++      }
++    }
++
+   public:
+     void init() {
+       using namespace Firebolt;
+@@ -220,6 +227,21 @@ class FireboltInterface::FireboltLifecycle {
+         is_focused_ = *is_focused;
+       }
+ 
++      auto &actions = IFireboltAccessor::Instance().ActionsInterface();
++
++      result = actions.subscribeOnIntent([this](const std::string& intent) {
++        handleIntent(intent);
++      });
++
++      auto intent = actions.intent();
++
++      if (!intent) {
++        SB_LOG(ERROR) << "actions.intent() failed, error code = " << intent.error();
++      } else {
++        SB_LOG(INFO) << "actions.intent(): " << *intent;
++        handleIntent(*intent);
++      }
++
+       auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
+ 
+       result = lifecycle.subscribeOnStateChanged([this](const std::vector<Lifecycle::StateChange>& changes) {
+@@ -695,6 +717,7 @@ bool FireboltInterface::lazy_init() {
+   }
+ 
+   Firebolt::Config cfg { };
++  cfg.log.level = Firebolt::LogLevel::Debug;
+   cfg.wsUrl = kFireboltEndpoint;
+   cfg.legacyRPCv1 = kEnableLegacyRPCv1;
+ #if !defined(COBALT_BUILD_TYPE_GOLD)
+-- 
+2.43.0
+
