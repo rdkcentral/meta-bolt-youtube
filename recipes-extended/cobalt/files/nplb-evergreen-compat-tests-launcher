@@ -1,0 +1,4 @@
+#!/bin/sh
+
+export TZ=:Europe/Warsaw
+nplb_evergreen_compat_tests --gtest_output="xml:$HOME/nplb-evergreen-compat-tests.xml"
