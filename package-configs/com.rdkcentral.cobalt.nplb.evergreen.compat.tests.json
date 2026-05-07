@@ -1,0 +1,19 @@
+{
+  "id": "com.rdkcentral.cobalt.nplb-evergreen-compat-tests",
+  "version": "0.2.0",
+  "versionName": "develop",
+  "name": "Cobalt NPLB evergreen compat tests",
+  "packageType": "application",
+  "entryPoint": "/usr/bin/nplb-evergreen-compat-tests-launcher",
+  "dependencies": {
+    "com.rdkcentral.base": "0.2.0"
+  },
+  "permissions": [
+    "urn:rdk:permission:internet",
+    "urn:rdk:permission:firebolt",
+    "urn:rdk:permission:thunder",
+    "urn:rdk:permission:rialto"
+  ],
+  "configuration": {
+  }
+}
