@@ -87,10 +87,13 @@ do_install() {
     install -d ${D}${libdir}
     install -m 0755 out/${COBALT_PLATFORM}_devel/libnplb.so ${D}${libdir}
     install -d ${D}${datadir}${COBALT_APP_DIR}/content
+    install -d ${D}${datadir}/content/data/app/cobalt/content
     cp -arv --no-preserve=ownership out/${COBALT_PLATFORM}_devel/content ${D}${datadir}${COBALT_APP_DIR}/
+    cp -arv --no-preserve=ownership out/${COBALT_PLATFORM}_devel/content ${D}${datadir}/content/data/app/cobalt/
 }
 
 FILES:${PN}  = "${libdir}/libnplb.so"
+FILES:${PN} += "${datadir}/content/data/app/cobalt/content/*"
 FILES_SOLIBSDEV = ""
 INSANE_SKIP:${PN} += "dev-so"
 INSANE_SKIP:${PN}-dbg += "dev-so"
