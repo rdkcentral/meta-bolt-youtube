@@ -1,6 +1,6 @@
 {
   "id": "com.rdkcentral.cobalt.nplb",
-  "version": "0.2.0",
+  "version": "auto",
   "versionName": "develop",
   "name": "Cobalt NPLB",
   "packageType": "application",
