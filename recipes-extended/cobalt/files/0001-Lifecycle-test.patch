@@ -1,0 +1,161 @@
+From e085115d72ee3bd52856dd3ee5cf3183e47d9564 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Tue, 23 Jun 2026 18:07:12 +0200
+Subject: [PATCH] Lifecycle test
+
+---
+ .../starboard/rdk/shared/application_rdk.h    |  4 +-
+ .../rdk/shared/platform/firebolt_interface.cc | 74 ++++++-------------
+ 2 files changed, 24 insertions(+), 54 deletions(-)
+
+diff --git a/src/third_party/starboard/rdk/shared/application_rdk.h b/src/third_party/starboard/rdk/shared/application_rdk.h
+index ed1db4e..8599884 100644
+--- a/src/third_party/starboard/rdk/shared/application_rdk.h
++++ b/src/third_party/starboard/rdk/shared/application_rdk.h
+@@ -71,8 +71,8 @@ class Application : public ::starboard::shared::starboard::QueueApplication {
+   int GetWindowHeight() const { return window_height_; }
+   void DisplayInfoChanged();
+ 
+-  bool IsStartImmediate() override { return !HasPreloadSwitch(); }
+-  bool IsPreloadImmediate() override { return HasPreloadSwitch(); }
++  bool IsStartImmediate() override { return false; }
++  bool IsPreloadImmediate() override { return true; }
+ 
+   void InjectAccessibilitySettingsChanged();
+   void InjectAccessibilityCaptionSettingsChanged();
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index 491431f..7e04da2 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -116,65 +116,62 @@ class FireboltInterface::FireboltLifecycle {
+ 
+         if (change.oldState == LifecycleState::INITIALIZING) {
+           switch (change.newState) {
+-            case LifecycleState::ACTIVE:
+-              if (focused) {
+-                Application::Get()->Focus(new RequestMonitor("Focus()"), &RequestMonitor::handle);
+-              } else {
+-                Application::Get()->Focus(new RequestMonitor("Focus()"), &RequestMonitor::handle);
+-                Application::Get()->Blur(new RequestMonitor("Blur()"), &RequestMonitor::handle);
+-              }
+-              break;
+             case LifecycleState::PAUSED:
+-                Application::Get()->Focus(new RequestMonitor("Focus()"), &RequestMonitor::handle);
+-                Application::Get()->Blur(new RequestMonitor("Blur()"), &RequestMonitor::handle);
+-                Application::Get()->Conceal(new RequestMonitor("Conceal()"), &RequestMonitor::handle);
++                // onStart()
++                Application::Get()->Reveal(new RequestMonitor("Reveal()"), &RequestMonitor::handle);
+               break;
+             case LifecycleState::SUSPENDED:
+-            case LifecycleState::HIBERNATED:
+-                Application::Get()->Focus(new RequestMonitor("Focus()"), &RequestMonitor::handle);
+-                Application::Get()->Blur(new RequestMonitor("Blur()"), &RequestMonitor::handle);
+-                Application::Get()->Conceal(new RequestMonitor("Conceal()"), &RequestMonitor::handle);
++                // onStartSuspend()
+                 Application::Get()->Freeze(new RequestMonitor("Freeze()"), &RequestMonitor::handle);
+               break;
+             case LifecycleState::TERMINATING:
+               SB_LOG(INFO) << "Triggered: Stop()";
+               Application::Get()->Stop(0);
+               break;
+-            case LifecycleState::INITIALIZING:
++            default:
++              SB_LOG(ERROR) << "Wrong state change from: " << change.oldState << " to: " << change.newState;
+               break;
+           }
+         } else {
+           switch (change.newState) {
+             case LifecycleState::ACTIVE:
++              // onActive()
+               if (change.oldState == LifecycleState::PAUSED) {
+-                Application::Get()->Reveal(new RequestMonitor("Reveal()"), &RequestMonitor::handle);
++                if (focused) {
++                  Application::Get()->Focus(new RequestMonitor("Focus()"), &RequestMonitor::handle);
++                }
++              } else {
++                SB_LOG(ERROR) << "Wrong state change from: " << change.oldState << " to: " << change.newState;
+               }
+ 
+-              if (focused) {
+-                Application::Get()->Focus(new RequestMonitor("Focus()"), &RequestMonitor::handle);
+-              }
+               break;
+             case LifecycleState::PAUSED:
++              // onResume()
+               if (change.oldState == LifecycleState::SUSPENDED) {
+-                Application::Get()->Unfreeze(new RequestMonitor("Unfreeze()"), &RequestMonitor::handle);
+-              } else {
++                Application::Get()->Reveal(new RequestMonitor("Reveal()"), &RequestMonitor::handle);
++              // onPause()
++              } else if (change.oldState == LifecycleState::ACTIVE) {
+                 if (focused) {
+                   Application::Get()->Blur(new RequestMonitor("Blur()"), &RequestMonitor::handle);
+                 }
+-                Application::Get()->Conceal(new RequestMonitor("Conceal()"), &RequestMonitor::handle);
++              } else {
++                SB_LOG(ERROR) << "Wrong state change from: " << change.oldState << " to: " << change.newState;
+               }
+               break;
+             case LifecycleState::SUSPENDED:
++              // onSuspend()
+               if (change.oldState == LifecycleState::PAUSED) {
+                 Application::Get()->Freeze(new RequestMonitor("Freeze()"), &RequestMonitor::handle);
++              } else {
++                SB_LOG(ERROR) << "Wrong state change from: " << change.oldState << " to: " << change.newState;
+               }
+               break;
+             case LifecycleState::TERMINATING:
+               SB_LOG(INFO) << "Triggered: Stop()";
+               Application::Get()->Stop(0);
+               break;
+-            case LifecycleState::HIBERNATED:
+-            case LifecycleState::INITIALIZING:
++            default:
++              SB_LOG(ERROR) << "Wrong state change from: " << change.oldState << " to: " << change.newState;
+               break;
+           }
+         }
+@@ -210,16 +207,6 @@ class FireboltInterface::FireboltLifecycle {
+         SB_LOG(ERROR) << "presentation.subscribeOnFocusedChanged failed, error code = " << result.error();
+       }
+ 
+-      auto is_focused = presentation.focused();
+-
+-      if (!is_focused) {
+-        SB_LOG(ERROR) << "presentation.focused() failed, error code = " << is_focused.error();
+-      } else {
+-        SB_LOG(INFO) << "presentation.focused(): " << (*is_focused ? "true" : "false");
+-        std::lock_guard<std::mutex> lock(mutex_);
+-        is_focused_ = *is_focused;
+-      }
+-
+       auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
+ 
+       result = lifecycle.subscribeOnStateChanged([this](const std::vector<Lifecycle::StateChange>& changes) {
+@@ -233,23 +220,6 @@ class FireboltInterface::FireboltLifecycle {
+       if (!result) {
+         SB_LOG(ERROR) << "lifecycle.subscribeOnStateChanged failed, error code = " << result.error();
+       }
+-
+-      auto current_state = lifecycle.state();
+-
+-      if (!current_state) {
+-        SB_LOG(ERROR) << "lifecycle.state() failed, error code = " << current_state.error();
+-      } else {
+-        SB_LOG(INFO) << "lifecycle.state(): " << *current_state;
+-        std::lock_guard<std::mutex> lock(mutex_);
+-        if (current_state_ != *current_state) {
+-          StateChange state_change { };
+-          state_change.oldState = current_state_;
+-          state_change.newState = *current_state;
+-          SB_LOG(INFO) << "handling initial state";
+-          lifecycleStateChanged({state_change}, is_focused_);
+-          current_state_ = *current_state;
+-        }
+-      }
+     }
+ };
+ 
+-- 
+2.43.0
+

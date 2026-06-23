@@ -6,6 +6,7 @@ SRC_URI += "file://exp/0001-RDKEVL-7397-Add-support-for-checking-EGL-surfaceless
 
 LARBOARD_SRCREV_DEV = "${AUTOREV}"
 SRC_URI := "${@d.getVar('SRC_URI').replace('name=larboard;branch=develop', 'name=larboard;branch=feature/firebolt-lifecycle')}"
+SRC_URI += "file://0001-Lifecycle-test.patch;patchdir=../larboard"
 
 GN_ARGS_EXTRA:append = " rdk_enable_wpecryptography=false rdk_enable_rdkservices_api=false rdk_enable_firebolt_api=true"
 DEPENDS += "firebolt-cpp-client firebolt-cpp-transport"
