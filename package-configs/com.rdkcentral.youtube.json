@@ -1,12 +1,12 @@
 {
   "id": "com.rdkcentral.youtube",
-  "version": "0.2.0",
+  "version": "auto",
   "versionName": "develop",
   "name": "YouTube",
   "packageType": "application",
   "entryPoint": " ",
   "dependencies": {
-    "com.rdkcentral.cobalt": "0.2.0"
+    "com.rdkcentral.cobalt": "auto"
   },
   "permissions": [
     "urn:rdk:permission:internet",
