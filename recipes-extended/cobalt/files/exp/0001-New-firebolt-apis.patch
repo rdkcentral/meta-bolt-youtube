@@ -1,0 +1,61 @@
+From 37cde6cdc6eaf75699d8d5ec4e0e755080c7e848 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Wed, 1 Jul 2026 13:52:06 +0200
+Subject: [PATCH] New firebolt apis
+
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index 8468f07..7fb612a 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -254,10 +254,28 @@ class FireboltInterface::FireboltLifecycle {
+ 
+ // FireboltDevice
+ std::optional<Resolution> FireboltInterface::FireboltDevice::video_resolution() {
++  auto &display = Firebolt::IFireboltAccessor::Instance().DisplayInterface();
++  auto res = display.maxResolution();
++
++  if (!res) {
++    SB_LOG(ERROR) << "display.maxResolution() failed, error code = " << res.error();
++  } else {
++    return Resolution{res->width, res->height};
++  }
++
+   return { };
+ }
+ 
+ std::optional<float> FireboltInterface::FireboltDevice::diagonal_size_in_inches() {
++  auto &display = Firebolt::IFireboltAccessor::Instance().DisplayInterface();
++  auto size = display.size();
++
++  if (!size) {
++    SB_LOG(ERROR) << "display.size() failed, error code = " << size.error();
++  } else {
++    return sqrtf(powf(size->width, 2) + powf(size->height, 2)) / 2.54f;
++  }
++
+   return { };
+ }
+ 
+@@ -341,6 +359,15 @@ std::optional<bool> FireboltInterface::FireboltDevice::is_connection_type_wirele
+ }
+ 
+ std::optional<bool> FireboltInterface::FireboltDevice::is_disconnected() {
++  auto &network = Firebolt::IFireboltAccessor::Instance().NetworkInterface();
++  auto connected = network.connected();
++
++  if (!connected) {
++    SB_LOG(ERROR) << "network.connected() failed, error code = " << connected.error();
++  } else {
++    return !connected.value();
++  }
++
+   return {};
+ }
+ 
+-- 
+2.43.0
+
