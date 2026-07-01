@@ -1,0 +1,50 @@
+Index: firebolt-cpp-client-0.6.2/src/actions_impl.cpp
+===================================================================
+--- firebolt-cpp-client-0.6.2.orig/src/actions_impl.cpp
++++ firebolt-cpp-client-0.6.2/src/actions_impl.cpp
+@@ -34,12 +34,12 @@ ActionsImpl::ActionsImpl(Firebolt::Helpe
+ 
+ Result<std::string> ActionsImpl::intent() const
+ {
+-    return helper_.get<Firebolt::JSON::String, std::string>("Actions.intent");
++    return helper_.get<Firebolt::Actions::JsonData::Intent, std::string>("Actions.intent");
+ }
+ 
+ Result<SubscriptionId> ActionsImpl::subscribeOnIntent(std::function<void(const std::string&)>&& notification)
+ {
+-    return subscriptionManager_.subscribe<Firebolt::JSON::String>("Actions.onIntent", std::move(notification));
++    return subscriptionManager_.subscribe<Firebolt::Actions::JsonData::Intent>("Actions.onIntent", std::move(notification));
+ }
+ 
+ Result<void> ActionsImpl::unsubscribe(SubscriptionId id)
+Index: firebolt-cpp-client-0.6.2/src/json_types/actions.h
+===================================================================
+--- firebolt-cpp-client-0.6.2.orig/src/json_types/actions.h
++++ firebolt-cpp-client-0.6.2/src/json_types/actions.h
+@@ -34,6 +34,26 @@ namespace Firebolt::Actions
+ namespace JsonData
+ {
+ 
++class Intent : public Firebolt::JSON::NL_Json_Basic<std::string>
++{
++public:
++    void fromJson(const nlohmann::json& json) override
++    {
++        if (json.is_object() && json.contains("intent"))
++        {
++            value_ = json.at("intent").get<std::string>();
++        }
++        else
++        {
++            value_ = json.get<std::string>();
++        }
++    }
++    std::string value() const override { return value_; }
++
++private:
++    std::string value_;
++};
++
+ } // namespace JsonData
+ 
+ } // namespace Firebolt::Actions
