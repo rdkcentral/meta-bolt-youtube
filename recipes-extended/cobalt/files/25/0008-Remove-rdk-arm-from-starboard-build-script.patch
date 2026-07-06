@@ -1,7 +1,7 @@
-From b2adbc04ae0c7a0f27785a6ae540a68531f809ee Mon Sep 17 00:00:00 2001
+From 62f8c1abb27ccd53e06eff12d5ae630a21cd709d Mon Sep 17 00:00:00 2001
 From: Ansu Mathew <ansu.mathew@rdkcentral.com>
-Date: Mon, 6 Jul 2026 09:33:23 +0000
-Subject: [PATCH] Remove redk-arm from starboard build script
+Date: Mon, 6 Jul 2026 12:51:58 +0000
+Subject: [PATCH] Remove rdk-arm from starboard build script
 
 ---
  starboard/build/platforms.py | 1 -
