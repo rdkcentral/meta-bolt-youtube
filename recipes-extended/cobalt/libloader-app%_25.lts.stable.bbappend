@@ -1,4 +1,4 @@
-FILESEXTRAPATHS:append := "${THISDIR}/files/:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/files/:"
 
 DEPENDS += "rialto-ocdm-link"
 

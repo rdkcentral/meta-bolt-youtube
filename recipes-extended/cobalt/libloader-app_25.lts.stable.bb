@@ -26,7 +26,6 @@ SRC_URI += "file://25/0004-Build-fix-for-ARM64.patch"
 SRC_URI += "file://25/0005-Use-Yocto-host-toolchain.patch"
 SRC_URI += "file://25/0006-Use-certifi-to-tell-urllib-where-to-find-CA-file-397.patch"
 SRC_URI += "file://25/0007-Prevent-cobalt-unloading.patch"
-SRC_URI += "file://25/0001-Workaround-for-YT-focus-issue-subscribe-to-OnStateCh.patch;patchdir=../larboard"
 
 CR = "30"
 PR = "r${CR}"
