@@ -1,10 +1,10 @@
 {
-  "id": "com.rdkcentral.youtube-exp",
+  "id": "com.rdkcentral.cobalt.nplb-evergreen-compat-tests",
   "version": "0.3.0",
   "versionName": "develop",
-  "name": "YouTube (experimental)",
+  "name": "Cobalt NPLB evergreen compat tests",
   "packageType": "application",
-  "entryPoint": "/usr/bin/loader_app",
+  "entryPoint": "/usr/bin/nplb-evergreen-compat-tests-launcher",
   "dependencies": {
     "com.rdkcentral.base": "0.2.0"
   },

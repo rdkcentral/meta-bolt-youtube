@@ -1,0 +1,64 @@
+From 70d7c8d0079478f847fcb29f7fb0b5d302ad0614 Mon Sep 17 00:00:00 2001
+From: Ansu Mathew <ansu.mathew@rdkcentral.com>
+Date: Wed, 15 Jul 2026 07:21:04 +0000
+Subject: [PATCH] Workaround for YT focus issue - subscribe to OnStateChanged
+ firebolt lifecycle event
+
+---
+ src/third_party/starboard/rdk/shared/BUILD.gn   |  4 ++++
+ .../rdk/shared/platform/firebolt_interface.cc   | 17 ++++++++++++++++-
+ 2 files changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/src/third_party/starboard/rdk/shared/BUILD.gn b/src/third_party/starboard/rdk/shared/BUILD.gn
+index de56add..df04730 100644
+--- a/src/third_party/starboard/rdk/shared/BUILD.gn
++++ b/src/third_party/starboard/rdk/shared/BUILD.gn
+@@ -35,6 +35,7 @@ declare_args() {
+   rdk_enable_ocdm = true
+   rdk_enable_rfc_api = false
+   rdk_enable_firebolt_api = false
++  rdk_enable_firebolt_lifecycle = false
+   rdk_enable_rdkservices_api = true
+   rdk_enable_wpecryptography = true
+   rdk_enable_firebolt_legacy_rpc_v1 = false
+@@ -493,6 +494,9 @@ static_library("starboard_platform") {
+     if (rdk_enable_firebolt_legacy_rpc_v1) {
+       defines += [ "FIREBOLT_LEGACY_RPC_V1=1" ]
+     }
++    if (rdk_enable_firebolt_lifecycle) {
++      defines += [ "ENABLE_FIREBOLT_LIFECYCLE=1" ]
++    }
+   }
+ 
+   if (rdk_enable_wpecryptography) {
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index abf3bb6..75987f4 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -508,7 +508,22 @@ void FireboltInterface::FireboltAccessibility::lazy_init(std::unique_lock<std::m
+   is_cc_enabled_ = cc_enabled;
+ }
+ 
+-FireboltInterface::FireboltInterface() = default;
++FireboltInterface::FireboltInterface() {
++// This is a workaround to resolve App focus issue. This will be modified with
++// proper firebolt lifecycle implementation
++#if defined(ENABLE_FIREBOLT_LIFECYCLE) && ENABLE_FIREBOLT_LIFECYCLE
++  using namespace Firebolt;
++  lazy_init();
++
++  auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
++
++  Result<SubscriptionId> result = lifecycle.subscribeOnStateChanged([](const std::vector<Lifecycle::StateChange>&) { });
++
++ if (!result) {
++     SB_LOG(ERROR) << "lifecycle.subscribeOnStateChanged failed, error code = " << result.error();
++  }
++#endif
++}
+ 
+ // static
+ bool FireboltInterface::is_available() {
+-- 
+2.44.4
+

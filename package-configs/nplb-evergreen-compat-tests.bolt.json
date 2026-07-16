@@ -1,0 +1,6 @@
+{
+  "config": "com.rdkcentral.cobalt.nplb.evergreen.compat.tests.json",
+  "bitbake": {
+    "image": "nplb-evergreen-compat-tests-bolt-image"
+  }
+}
