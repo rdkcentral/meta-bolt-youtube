@@ -1,6 +1,6 @@
 {
   "id": "com.rdkcentral.cobalt.nplb-evergreen-compat-tests",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "versionName": "develop",
   "name": "Cobalt NPLB evergreen compat tests",
   "packageType": "application",
