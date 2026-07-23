@@ -3,7 +3,7 @@
 
 <!-- 2026Q1 release -->
   <project remote="rdkcentral" name="meta-rdk" upstream="main" revision="refs/tags/1.17.0" path="meta-rdk"/>
-  <project remote="rdkcentral" name="meta-rdk-video" upstream="main" revision="refs/tags/1.17.0" path="meta-rdk-video"/>
+  <project remote="rdkcentral" name="meta-rdk-video" upstream="develop" revision="83364b2f5d5ac75c6975b4e0d0d21dd149eb6f07" path="meta-rdk-video"/>
   <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.8.0" path="meta-rdk-auxiliary"/>
   <project remote="rdkcentral" name="meta-rdk-oss-reference" upstream="main" revision="refs/tags/4.12.0" path="meta-rdk-oss-reference"/>
 
