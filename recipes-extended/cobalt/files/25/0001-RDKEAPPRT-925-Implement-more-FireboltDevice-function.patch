@@ -1,0 +1,77 @@
+From b1c07f57815a871362a2079a4ccc29b524cc3b68 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Wed, 1 Jul 2026 13:52:06 +0200
+Subject: [PATCH] RDKEAPPRT-925: Implement more FireboltDevice functions
+
+This implements FireboltDevice functions:
+- video_resolution()
+- diagonal_size_in_inches()
+- is_disconnected()
+
+Based on APIs available in firebolt-cpp-client v0.6.2.
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index af2edb6..587b8ba 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -29,6 +29,7 @@
+ 
+ #include <chrono>
+ #include <cstring>
++#include <cmath>
+ 
+ using namespace std::chrono_literals;
+ using starboard::shared::starboard::media::MimeSupportabilityCache;
+@@ -70,10 +71,30 @@ std::ostream& operator<<(std::ostream& out, const Firebolt::Error& e) {
+ 
+ // FireboltDevice
+ std::optional<Resolution> FireboltInterface::FireboltDevice::video_resolution() {
++  auto &display = Firebolt::IFireboltAccessor::Instance().DisplayInterface();
++  auto res = display.maxResolution();
++
++  if (!res) {
++    SB_LOG(ERROR) << "display.maxResolution() failed, error code = " << res.error();
++  } else {
++    return Resolution{res->width, res->height};
++  }
++
+   return { };
+ }
+ 
+ std::optional<float> FireboltInterface::FireboltDevice::diagonal_size_in_inches() {
++  auto &display = Firebolt::IFireboltAccessor::Instance().DisplayInterface();
++  auto size = display.size();
++
++  if (!size) {
++    SB_LOG(ERROR) << "display.size() failed, error code = " << size.error();
++  } else {
++    const float width = static_cast<float>(size->width);
++    const float height = static_cast<float>(size->height);
++    return std::sqrt(width * width + height * height) / 2.54f;
++  }
++
+   return { };
+ }
+ 
+@@ -157,6 +178,15 @@ std::optional<bool> FireboltInterface::FireboltDevice::is_connection_type_wirele
+ }
+ 
+ std::optional<bool> FireboltInterface::FireboltDevice::is_disconnected() {
++  auto &network = Firebolt::IFireboltAccessor::Instance().NetworkInterface();
++  auto connected = network.connected();
++
++  if (!connected) {
++    SB_LOG(ERROR) << "network.connected() failed, error code = " << connected.error();
++  } else {
++    return !connected.value();
++  }
++
+   return {};
+ }
+ 
+-- 
+2.43.0
+
