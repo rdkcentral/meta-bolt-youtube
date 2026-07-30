@@ -1,12 +1,12 @@
 {
   "id": "com.rdkcentral.cobalt",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "versionName": "develop",
   "name": "Cobalt",
   "packageType": "runtime",
   "entryPoint": "/usr/bin/loader_app",
   "dependencies": {
-    "com.rdkcentral.base": "0.2.0"
+    "com.rdkcentral.base": "0.3.1"
   },
   "permissions": [
   ],
