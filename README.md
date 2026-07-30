@@ -41,9 +41,9 @@ bolt make youtube
 To run bolt packages on device, use `bolt push` and `bolt run` as explained in [bolt tool usage](https://github.com/rdkcentral/bolt-tools/tree/main/bolt#usage)
 
 ```
-bolt push <remote> com.rdkcentral.base+0.1.0
-bolt push <remote> com.rdkcentral.cobalt+0.1.0
-bolt push <remote> com.rdkcentral.youtube+0.1.0
+bolt push <remote> com.rdkcentral.base+0.3.1
+bolt push <remote> com.rdkcentral.cobalt+0.3.1
+bolt push <remote> com.rdkcentral.youtube+0.3.1
 
-bolt run <remote> com.rdkcentral.youtube+0.1.0
+bolt run <remote> com.rdkcentral.youtube+0.3.1
 ```
