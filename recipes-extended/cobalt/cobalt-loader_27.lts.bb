@@ -21,7 +21,7 @@ SRC_URI += "file://27/0002-Fix-sysroot-for-rdk_build_with_yocto-builds.patch;app
 SRC_URI += "file://27/0003-Fix-invalid-conversion.patch;apply=no"
 SRC_URI += "file://27/0004-Fix-audio-ports-type.patch;apply=no"
 
-CR = "1"
+CR = "2"
 PR = "r${CR}"
 SRCREV_cobalt = "27.lts.${CR}"
 SRCREV_larboard = "${LARBOARD_SRCREV_DEV}"
