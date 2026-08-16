@@ -13,18 +13,14 @@ PATCHTOOL = "git"
 TOOLCHAIN = "gcc"
 PACKAGE_ARCH = "${MIDDLEWARE_ARCH}"
 
-COBALT_BRANCH = "27.lts"
-SRC_URI  = "git://github.com/youtube/cobalt.git;protocol=https;name=cobalt;branch=${COBALT_BRANCH};destsuffix=chromium/src"
-SRC_URI += "${LARBOARD_SRC_URI};protocol=${CMF_GITHUB_PROTOCOL};destsuffix=larboard;name=larboard;branch=develop"
-SRC_URI += "file://27/0001-Fix-assignment-with-no-effect-for-rdk_build_with_yoc.patch;apply=no"
+SRC_URI  = "git://github.com/youtube/cobalt.git;protocol=https;name=cobalt;branch=27.lts;destsuffix=chromium/src"
+SRC_URI += "${LARBOARD_SRC_URI};protocol=${CMF_GITHUB_PROTOCOL};destsuffix=larboard;name=larboard;branch=feature/RDKEAPPRT-1142"
 SRC_URI += "file://27/0002-Fix-sysroot-for-rdk_build_with_yocto-builds.patch;apply=no"
-SRC_URI += "file://27/0003-Fix-invalid-conversion.patch;apply=no"
-SRC_URI += "file://27/0004-Fix-audio-ports-type.patch;apply=no"
 
 CR = "2"
 PR = "r${CR}"
-SRCREV_cobalt = "27.lts.${CR}"
-SRCREV_larboard = "${LARBOARD_SRCREV_DEV}"
+SRCREV_cobalt = "${AUTOREV}"
+SRCREV_larboard = "${AUTOREV}"
 SRCREV_FORMAT = "cobalt_larboard"
 PV .= "+git${SRCPV}"
 
@@ -118,8 +114,8 @@ do_gclient_sync() {
     cd ${S}/..
     gclient config --name=src https://github.com/youtube/cobalt.git
     cd src
-    git reset --hard ${SRCREV_cobalt}
-    gclient sync -j ${GCLIENT_JOBS} --no-history --reset -r ${SRCREV_cobalt}
+    git reset --hard $(git rev-parse HEAD)
+    gclient sync -j ${GCLIENT_JOBS} --no-history --reset -r $(git rev-parse HEAD)
     build/linux/sysroot_scripts/install-sysroot.py --arch=${TARGET_ARCH}
 }
 addtask gclient_sync after do_prepare_recipe_sysroot do_unpack before do_configure
@@ -136,6 +132,13 @@ do_patch_extra() {
     done
 }
 addtask patch_extra after do_gclient_sync before do_configure
+
+do_unpack_extra() {
+    bbnote "replace larboard"
+    mv "${S}/starboard/contrib/rdk" "${S}/starboard/contrib/rdk-org"
+    ln -sf ../../../../larboard "${S}/starboard/contrib/rdk"
+}
+addtask unpack_extra after do_patch_extra before do_configure
 
 do_configure[cleandirs] = "${B}"
 
@@ -157,5 +160,8 @@ do_install() {
 
     chrpath -d ${D}${bindir}/loader_app ${D}${bindir}/native_target/crashpad_handler
 
-    cp -av --no-preserve=ownership ${COBALT_OUT_DIR}/fonts ${D}${bindir}
+    install -d "${D}${datadir}/content/data/app/cobalt/content"
+    cp -av --no-preserve=ownership ${COBALT_OUT_DIR}/fonts "${D}${datadir}/content/data/app/cobalt/content"
 }
+
+FILES:${PN} += "${datadir}"
