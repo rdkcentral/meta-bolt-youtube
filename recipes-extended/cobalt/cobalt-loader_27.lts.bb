@@ -113,7 +113,7 @@ do_gclient_sync() {
     [ -n "${CIPD_CACHE_DIR}" ] && export CIPD_CACHE_DIR="${CIPD_CACHE_DIR}"
     [ -n "${VPYTHON_VIRTUALENV_ROOT}" ] && export VPYTHON_VIRTUALENV_ROOT="${VPYTHON_VIRTUALENV_ROOT}"
 
-    ( . ${STAGING_DATADIR_NATIVE}/depot_tools/bootstrap_python3 && bootstrap_python3 )
+    bash -c '. ${STAGING_DATADIR_NATIVE}/depot_tools/bootstrap_python3 && bootstrap_python3'
 
     cd ${S}/..
     gclient config --name=src https://github.com/youtube/cobalt.git
