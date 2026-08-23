@@ -14,12 +14,18 @@ TOOLCHAIN = "gcc"
 PACKAGE_ARCH = "${MIDDLEWARE_ARCH}"
 
 COBALT_BRANCH = "27.lts"
+LARBOARD_BRANCH ?= "develop"
+
 SRC_URI  = "git://github.com/youtube/cobalt.git;protocol=https;name=cobalt;branch=${COBALT_BRANCH};destsuffix=chromium/src"
-SRC_URI += "${LARBOARD_SRC_URI};protocol=${CMF_GITHUB_PROTOCOL};destsuffix=larboard;name=larboard;branch=develop"
+SRC_URI += "${LARBOARD_SRC_URI};protocol=${CMF_GITHUB_PROTOCOL};destsuffix=larboard;name=larboard;branch=${LARBOARD_BRANCH}"
 SRC_URI += "file://27/0001-Fix-assignment-with-no-effect-for-rdk_build_with_yoc.patch;apply=no"
 SRC_URI += "file://27/0002-Fix-sysroot-for-rdk_build_with_yocto-builds.patch;apply=no"
 SRC_URI += "file://27/0003-Fix-invalid-conversion.patch;apply=no"
 SRC_URI += "file://27/0004-Fix-audio-ports-type.patch;apply=no"
+
+SRC_URI:append:develop = " file://27.dev/0001-Fix-sysroot-for-rdk_build_with_yocto-builds.patch;apply=no"
+SRCREV_cobalt:develop = "${AUTOREV}"
+SRCREV_larboard:develop = "${AUTOREV}"
 
 CR = "2"
 PR = "r${CR}"
@@ -105,6 +111,9 @@ CIPD_CACHE_DIR ?= ""
 VPYTHON_VIRTUALENV_ROOT ?= "${WORKDIR}/.vpython-root"
 GCLIENT_JOBS ?= "4"
 
+COBALT_SYNC_REV = "${SRCREV_cobalt}"
+COBALT_SYNC_REV:develop = "HEAD"
+
 do_gclient_sync[network] = "1"
 do_gclient_sync[vardepsexclude] = "GIT_CACHE_PATH CIPD_CACHE_DIR VPYTHON_VIRTUALENV_ROOT"
 
@@ -118,16 +127,20 @@ do_gclient_sync() {
     cd ${S}/..
     gclient config --name=src https://github.com/youtube/cobalt.git
     cd src
-    git reset --hard ${SRCREV_cobalt}
-    gclient sync -j ${GCLIENT_JOBS} --no-history --reset -r ${SRCREV_cobalt}
+    rev=$(git rev-parse "${COBALT_SYNC_REV}^{commit}")
+    git reset --hard "$rev"
+    gclient sync -j ${GCLIENT_JOBS} --no-history --reset -r "$rev"
     build/linux/sysroot_scripts/install-sysroot.py --arch=${TARGET_ARCH}
 }
 addtask gclient_sync after do_prepare_recipe_sysroot do_unpack before do_configure
 
+PATCH_DIR = "27"
+PATCH_DIR:develop = "27.dev"
+
 do_patch_extra() {
     cd ${S}
 
-    for patch in ${WORKDIR}/27/*.patch; do
+    for patch in ${WORKDIR}/${PATCH_DIR}/*.patch; do
         if git apply --reverse --check $patch 2>/dev/null; then
             bbnote "$patch is already applied, skipping"
         else
@@ -136,6 +149,19 @@ do_patch_extra() {
     done
 }
 addtask patch_extra after do_gclient_sync before do_configure
+
+do_patch_extra:append:develop() {
+    bbnote "replacing in-tree starboard/contrib/rdk with larboard"
+
+    rdk_dir="${S}/starboard/contrib/rdk"
+    larboard_dir="${WORKDIR}/larboard"
+
+    if [ ! -L "$rdk_dir" ]; then
+        rm -rf "$rdk_dir-org"
+        mv "$rdk_dir" "$rdk_dir-org"
+        ln -sr "$larboard_dir" "$rdk_dir"
+    fi
+}
 
 do_configure[cleandirs] = "${B}"
 
@@ -150,6 +176,9 @@ do_compile() {
     autoninja -C ${COBALT_OUT_DIR} loader_app
 }
 
+FONTS_DIR = "${bindir}"
+FONTS_DIR:develop = "${datadir}/content/data/app/cobalt/content"
+
 do_install() {
     install -d ${D}${bindir}/native_target
     install -m 0755 ${COBALT_OUT_DIR}/native_target/crashpad_handler ${D}${bindir}/native_target
@@ -157,5 +186,8 @@ do_install() {
 
     chrpath -d ${D}${bindir}/loader_app ${D}${bindir}/native_target/crashpad_handler
 
-    cp -av --no-preserve=ownership ${COBALT_OUT_DIR}/fonts ${D}${bindir}
+    install -d "${D}${FONTS_DIR}"
+    cp -av --no-preserve=ownership ${COBALT_OUT_DIR}/fonts "${D}${FONTS_DIR}"
 }
+
+FILES:${PN} += "${FONTS_DIR}"

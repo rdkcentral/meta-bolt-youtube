@@ -1,0 +1,35 @@
+From fd99dfa3d27c88748e81e113121433358bccc443 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Wed, 29 Jul 2026 22:26:49 +0200
+Subject: [PATCH] Fix sysroot for rdk_build_with_yocto builds
+
+Set sysroot path from RDK_HOME environment variable when
+rdk_build_with_yocto is equal to true.
+---
+ starboard/build/config/linux/rdk/config_variables.gni | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/starboard/build/config/linux/rdk/config_variables.gni b/starboard/build/config/linux/rdk/config_variables.gni
+index b246abc96e68..4336959d46e3 100644
+--- a/starboard/build/config/linux/rdk/config_variables.gni
++++ b/starboard/build/config/linux/rdk/config_variables.gni
+@@ -15,10 +15,15 @@
+ declare_args() {
+   rdk_starboard_root = "/"
+   rdk_arm_call_convention = "hardfp"
++  rdk_build_with_yocto = true
+ }
+ 
+ rdk_home_dir = getenv("RDK_HOME")
+ assert(rdk_home_dir != "",
+        "RDK builds require the 'RDK_HOME' environment variable to be set.")
+ 
+-rdk_sysroot = "$rdk_home_dir/sysroots/aarch64-rdk-linux"
++if (rdk_build_with_yocto) {
++  rdk_sysroot = rdk_home_dir
++} else {
++  rdk_sysroot = "$rdk_home_dir/sysroots/aarch64-rdk-linux"
++}
+-- 
+2.43.0
+
