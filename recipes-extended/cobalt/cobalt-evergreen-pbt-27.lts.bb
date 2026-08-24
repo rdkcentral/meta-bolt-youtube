@@ -47,6 +47,7 @@ SRC_URI[cobalt.sha256sum] = "${CRX_FILE_SHA256SUM}"
 SRC_URI[cobalt_debug.sha256sum] = "${DBG_FILE_SHA256SUM}"
 
 COBALT_APP_DIR = "${bindir}/app/cobalt"
+COBALT_APP_DIR:develop = "${datadir}/content/data/app/cobalt"
 
 inherit breakpad-wrapper
 breakpad_package_preprocess () {
@@ -86,6 +87,10 @@ do_install() {
 
     install -d "${D}${COBALT_APP_DIR}/lib/.debug"
     install -m 0755 ${WORKDIR}/debug_syms/libcobalt.so ${D}${COBALT_APP_DIR}/lib/.debug
+}
+
+do_install:append:develop() {
+    rm -f "${D}${COBALT_APP_DIR}/content/fonts/fonts.xml"
 }
 
 FILES:${PN}  = "${COBALT_APP_DIR}/content/*"
