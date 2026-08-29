@@ -79,6 +79,7 @@ PACKAGECONFIG[wpecryptography]     = ",rdk_enable_wpecryptography=false,"
 PACKAGECONFIG[rdkservices]   = ",rdk_enable_rdkservices_api=false,"
 
 GN_ARGS_EXTRA ?= ""
+GN_ARGS_EXTRA:append = " starboard_level_final_executable_type=\"executable\""
 GN_ARGS_EXTRA:append = " rdk_build_with_yocto=true"
 GN_ARGS_EXTRA:append = " sb_enable_cpp20_audit=false"
 GN_ARGS_EXTRA:append:arm = " rdk_arm_call_convention=\"${@bb.utils.contains('TUNE_FEATURES', 'callconvention-hard', 'hardfp', 'softfp', d)}\""
