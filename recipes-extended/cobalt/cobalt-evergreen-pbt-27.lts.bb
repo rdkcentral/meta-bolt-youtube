@@ -12,33 +12,33 @@ OVERRIDES:append = ":${TARGET_FPU}:${@bb.utils.filter('DISTRO_FEATURES', 'cobalt
 
 PACKAGE_ARCH = "${MIDDLEWARE_ARCH}"
 
-CRX_FILE:arm:hard:cobalt-qa = "cobalt_evergreen_7.1.2_arm-hardfp_sbversion-18_qa_compressed_20260627021609.crx"
-CRX_FILE_SHA256SUM:arm:hard:cobalt-qa = "8992dc5055fd6b64142d69f872d0da49760a917c4828a8fca1f056841bd1f770"
+CRX_FILE:arm:hard:cobalt-qa = "cobalt_evergreen_7.2.2_arm-hardfp_sbversion-18_qa_compressed_20260729215815.crx"
+CRX_FILE_SHA256SUM:arm:hard:cobalt-qa = "6a66c9e2e0ba9e999ff190d030667307e6cbf7bf771e0127be6563ed29e8fd9a"
 
-CRX_FILE:arm:hard = "cobalt_evergreen_7.1.2_arm-hardfp_sbversion-18_release_compressed_20260627021609.crx"
-CRX_FILE_SHA256SUM:arm:hard = "98a336319ce71f192932ddd9e62c927d3a3d2f6c5a49584cbf63b359d2dca1f1"
+CRX_FILE:arm:hard = "cobalt_evergreen_7.2.2_arm-hardfp_sbversion-18_release_compressed_20260729215815.crx"
+CRX_FILE_SHA256SUM:arm:hard = "11e6b5972d466192c1fdeead6df30800e23634aac3865f609c02dad2dee25375"
 
-CRX_FILE:aarch64:cobalt-qa = "cobalt_evergreen_7.1.2_arm64_sbversion-18_qa_compressed_20260627021609.crx"
-CRX_FILE_SHA256SUM:aarch64:cobalt-qa = "9bab0db81e65384b41453cb8c22777a0a0fd808c8b03b9c57b21c4199b430d67"
+CRX_FILE:aarch64:cobalt-qa = "cobalt_evergreen_7.2.2_arm64_sbversion-18_qa_compressed_20260729215815.crx"
+CRX_FILE_SHA256SUM:aarch64:cobalt-qa = "d5775511ce58fef8dbe3a22ff5ff515dac62d1c1d53970f63b9a0b3f97b4266c"
 
-CRX_FILE:aarch64 = "cobalt_evergreen_7.1.2_arm64_sbversion-18_release_compressed_20260627021609.crx"
-CRX_FILE_SHA256SUM:aarch64 = "5096e62cdad52da7143c0baf19fc0216ef4c1eedc3c7b08f50ef6af4e45f93bc"
+CRX_FILE:aarch64 = "cobalt_evergreen_7.2.2_arm64_sbversion-18_release_compressed_20260729215815.crx"
+CRX_FILE_SHA256SUM:aarch64 = "71052aafda90ea90deeab9d0f9646a9cf287ad5690ea47c9ef3093f9fe719f59"
 
-DBG_FILE:arm:hard:cobalt-qa = "libcobalt_7.1.2_unstripped_arm-hardfp_sbversion-18_qa_6b88c1e38d3be99b095f53f3b6ea09b2c65ef09f.tar.gz"
-DBG_FILE_SHA256SUM:arm:hard:cobalt-qa = "6998130a4c7f6f4375c0dbc665196330dd8a52633c580c22f43cb0a45ee9ed0f"
+DBG_FILE:arm:hard:cobalt-qa = "libcobalt_7.2.2_unstripped_arm-hardfp_sbversion-18_qa_1d725365ef6a5356ad6b38bd5c7854b92158889a.tar.gz"
+DBG_FILE_SHA256SUM:arm:hard:cobalt-qa = "daca93f861a670fbc40154fb994a0196a156c8550694b188bd708bac61b5c25a"
 
-DBG_FILE:arm:hard = "libcobalt_7.1.2_unstripped_arm-hardfp_sbversion-18_release_1e4d660cc5efb6a816c615645da1e72c961351d7.tar.gz"
-DBG_FILE_SHA256SUM:arm:hard = "faa482d335bb64a8d0e6a62206b6e5e3138aafa2cecd4e1d7314ee57eb033e4f"
+DBG_FILE:arm:hard = "libcobalt_7.2.2_unstripped_arm-hardfp_sbversion-18_release_0d9ea40e10857dbbd8e92da4b8dcd5810f38690e.tar.gz"
+DBG_FILE_SHA256SUM:arm:hard = "17c827c98613139ae4813b4f8d7d5ac6cf9d19c5238d0bdc6db7eb022a483407"
 
-DBG_FILE:aarch64:cobalt-qa = "libcobalt_7.1.2_unstripped_arm64_sbversion-18_qa_19a1eb2f65b92097edb497f7543c4274967edc23.tar.gz"
-DBG_FILE_SHA256SUM:aarch64:cobalt-qa = "ba14e81aba4060691653587654ce5fdd6300905826f68723ce76fb973fb89c63"
+DBG_FILE:aarch64:cobalt-qa = "libcobalt_7.2.2_unstripped_arm64_sbversion-18_qa_fddcd287ae9542f2bfd09ea3465756eb54addd05.tar.gz"
+DBG_FILE_SHA256SUM:aarch64:cobalt-qa = "84ebb8dd55ceb9f9f2d39d60622ac1c04cb1860f1183213b5529cb3affcfe2f9"
 
-DBG_FILE:aarch64 = "libcobalt_7.1.2_unstripped_arm64_sbversion-18_release_738ddb4e8034a7a2376abb38e2b0ff5df2ab89b4.tar.gz"
-DBG_FILE_SHA256SUM:aarch64 = "c084c17cca7e9ba0d86e19064c0a87752a55f031aade9e3de50e7d0fbbf52a12"
+DBG_FILE:aarch64 = "libcobalt_7.2.2_unstripped_arm64_sbversion-18_release_40b1769a7a6f5715afec7fcdb9458faccee0fb07.tar.gz"
+DBG_FILE_SHA256SUM:aarch64 = "2b0e64b79918efcc852b9b6bff6b35e1f69f5e40febf51f5c4d427c5a574e22a"
 
 
-PV = "7.1.2"
-YT_BASE_URI = "https://github.com/youtube/cobalt/releases/download/27.lts.1"
+PV = "7.2.2"
+YT_BASE_URI = "https://github.com/youtube/cobalt/releases/download/27.lts.2"
 
 SRC_URI  = "${YT_BASE_URI}/${CRX_FILE};name=cobalt"
 SRC_URI += "${YT_BASE_URI}/${DBG_FILE};name=cobalt_debug;subdir=debug_syms"
