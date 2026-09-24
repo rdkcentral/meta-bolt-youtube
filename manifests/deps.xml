@@ -2,8 +2,8 @@
   <remote name="rdkcentral" fetch="https://github.com/rdkcentral/"/>
 
 <!-- 2026Q2 release -->
-  <project remote="rdkcentral" name="meta-rdk" upstream="develop" revision="4c2e4ba0e19a5a474ea892959d015def2b0aa86b" path="meta-rdk"/>
-  <project remote="rdkcentral" name="meta-rdk-video" upstream="develop" revision="8330de968456cff58b42867682bbaacf5c97a2c9" path="meta-rdk-video"/>
+  <project remote="rdkcentral" name="meta-rdk" upstream="main" revision="refs/tags/1.20.0" path="meta-rdk"/>
+  <project remote="rdkcentral" name="meta-rdk-video" upstream="main" revision="refs/tags/1.20.0" path="meta-rdk-video"/>
   <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.9.0" path="meta-rdk-auxiliary"/>
   <project remote="rdkcentral" name="meta-rdk-oss-reference" upstream="main" revision="refs/tags/4.13.0" path="meta-rdk-oss-reference"/>
 
