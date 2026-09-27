@@ -15,22 +15,27 @@ PACKAGE_ARCH = "${MIDDLEWARE_ARCH}"
 
 COBALT_BRANCH = "27.lts"
 LARBOARD_BRANCH ?= "develop"
-
-SRC_URI  = "git://github.com/youtube/cobalt.git;protocol=https;name=cobalt;branch=${COBALT_BRANCH};destsuffix=chromium/src"
-SRC_URI += "${LARBOARD_SRC_URI};protocol=${CMF_GITHUB_PROTOCOL};destsuffix=larboard;name=larboard;branch=${LARBOARD_BRANCH}"
-SRC_URI += "file://27/0001-Fix-assignment-with-no-effect-for-rdk_build_with_yoc.patch;apply=no"
-SRC_URI += "file://27/0002-Fix-sysroot-for-rdk_build_with_yocto-builds.patch;apply=no"
-SRC_URI += "file://27/0003-Fix-invalid-conversion.patch;apply=no"
-SRC_URI += "file://27/0004-Fix-audio-ports-type.patch;apply=no"
-
-SRC_URI:append:develop = " file://27.dev/0001-Fix-sysroot-for-rdk_build_with_yocto-builds.patch;apply=no"
+CR = "3"
+PR = "r${CR}"
+SRCREV_cobalt   ?= "27.lts.${CR}"
+SRCREV_larboard ?= "23ababa8730988801d6a505f0e35b3a33b341f94"
 SRCREV_cobalt:develop = "${AUTOREV}"
 SRCREV_larboard:develop = "${AUTOREV}"
 
-CR = "2"
-PR = "r${CR}"
-SRCREV_cobalt = "27.lts.${CR}"
-SRCREV_larboard = "${LARBOARD_SRCREV_DEV}"
+SRC_URI  = "git://github.com/youtube/cobalt.git;protocol=https;name=cobalt;branch=${COBALT_BRANCH};destsuffix=chromium/src"
+SRC_URI += "${LARBOARD_SRC_URI};protocol=${CMF_GITHUB_PROTOCOL};destsuffix=larboard;name=larboard;branch=${LARBOARD_BRANCH}"
+SRC_URI += "${COBALT_PATCHES}"
+
+COBALT_PATCHES = "file://27/0001-Include-RDK-platforms.patch"
+COBALT_PATCHES:in-tree = " \
+    file://27/0001-Fix-assignment-with-no-effect-for-rdk_build_with_yoc.patch \
+    file://27/0002-Fix-sysroot-for-rdk_build_with_yocto-builds.patch \
+    file://27/0003-Fix-invalid-conversion.patch \
+    file://27/0004-Let-args-configure-the-loader-app-target-type.patch \
+    file://27/0005-Fix-namespaces-in-firebolt_interface.cc.patch \
+    file://27/0006-Fix-libcobalt.cc-build-without-rdkservices-API.patch \
+"
+
 SRCREV_FORMAT = "cobalt_larboard"
 PV .= "+git${SRCPV}"
 
@@ -80,22 +85,23 @@ PACKAGECONFIG[rdkservices]   = ",rdk_enable_rdkservices_api=false,"
 
 GN_ARGS_EXTRA ?= ""
 GN_ARGS_EXTRA:append = " starboard_level_final_executable_type=\"executable\""
-GN_ARGS_EXTRA:append = " rdk_build_with_yocto=true"
+GN_ARGS_EXTRA:append = " use_sysroot=false"
 GN_ARGS_EXTRA:append = " sb_enable_cpp20_audit=false"
 GN_ARGS_EXTRA:append:arm = " rdk_arm_call_convention=\"${@bb.utils.contains('TUNE_FEATURES', 'callconvention-hard', 'hardfp', 'softfp', d)}\""
 GN_ARGS_EXTRA:append = " ${PACKAGECONFIG_CONFARGS}"
+GN_ARGS_EXTRA:append:in-tree = " rdk_build_with_yocto=true"
+GN_ARGS_EXTRA:append:in-tree = " pkg_config=\"pkg-config\""
 
 inherit python3native pkgconfig breakpad-wrapper ccache
 
 BREAKPAD_BIN = "loader_app crashpad_handler"
 
-CFLAGS:append = " -I${S}/starboard/contrib/rdk/src"
-CXXFLAGS:append = " -I${S}/starboard/contrib/rdk/src"
+CFLAGS:append:in-tree = " -I${S}/starboard/contrib/rdk/src"
+CXXFLAGS:append:in-tree = " -I${S}/starboard/contrib/rdk/src"
 
 PATH:prepend = "${STAGING_DATADIR_NATIVE}/depot_tools:"
 
 export RDK_HOME = "${RECIPE_SYSROOT}"
-export PKG_CONFIG_SYSROOT_DIR = ""
 export CURL_CA_BUNDLE = "${STAGING_ETCDIR_NATIVE}/ssl/certs/ca-certificates.crt"
 export SSL_CERT_FILE = "${STAGING_ETCDIR_NATIVE}/ssl/certs/ca-certificates.crt"
 export DEPOT_TOOLS_METRICS = "0"
@@ -112,9 +118,6 @@ CIPD_CACHE_DIR ?= ""
 VPYTHON_VIRTUALENV_ROOT ?= "${WORKDIR}/.vpython-root"
 GCLIENT_JOBS ?= "4"
 
-COBALT_SYNC_REV = "${SRCREV_cobalt}"
-COBALT_SYNC_REV:develop = "HEAD"
-
 do_gclient_sync[network] = "1"
 do_gclient_sync[vardepsexclude] = "GIT_CACHE_PATH CIPD_CACHE_DIR VPYTHON_VIRTUALENV_ROOT"
 
@@ -126,43 +129,24 @@ do_gclient_sync() {
     bash -c '. ${STAGING_DATADIR_NATIVE}/depot_tools/bootstrap_python3 && bootstrap_python3'
 
     cd ${S}/..
-    gclient config --name=src https://github.com/youtube/cobalt.git
+    gclient config --name=src https://github.com/youtube/cobalt.git --custom-var=checkout_configuration=small
     cd src
-    rev=$(git rev-parse "${COBALT_SYNC_REV}^{commit}")
-    git reset --hard "$rev"
-    gclient sync -j ${GCLIENT_JOBS} --no-history --reset -r "$rev"
+    gclient sync -j ${GCLIENT_JOBS} --no-history --reset -r $(git merge-base HEAD origin/${COBALT_BRANCH})
     build/linux/sysroot_scripts/install-sysroot.py --arch=${TARGET_ARCH}
 }
-addtask gclient_sync after do_prepare_recipe_sysroot do_unpack before do_configure
-
-PATCH_DIR = "27"
-PATCH_DIR:develop = "27.dev"
+addtask gclient_sync after do_prepare_recipe_sysroot do_unpack before do_patch
 
 do_patch_extra() {
-    cd ${S}
-
-    for patch in ${WORKDIR}/${PATCH_DIR}/*.patch; do
-        if git apply --reverse --check $patch 2>/dev/null; then
-            bbnote "$patch is already applied, skipping"
-        else
-            git apply --verbose $patch
-        fi
-    done
-}
-addtask patch_extra after do_gclient_sync before do_configure
-
-do_patch_extra:append:develop() {
     bbnote "replacing in-tree starboard/contrib/rdk with larboard"
 
-    rdk_dir="${S}/starboard/contrib/rdk"
-    larboard_dir="${WORKDIR}/larboard"
-
-    if [ ! -L "$rdk_dir" ]; then
-        rm -rf "$rdk_dir-org"
-        mv "$rdk_dir" "$rdk_dir-org"
-        ln -sr "$larboard_dir" "$rdk_dir"
-    fi
+    bbnote "copy larboard"
+    ( cd "${S}/third_party/" && ln -sfr ${WORKDIR}/larboard/src/third_party/starboard . )
 }
+
+do_patch_extra:in-tree() {
+    bbnote "using in-tree starboard/contrib/rdk"
+}
+addtask patch_extra after do_gclient_sync before do_configure
 
 do_configure[cleandirs] = "${B}"
 
@@ -177,8 +161,7 @@ do_compile() {
     autoninja -C ${COBALT_OUT_DIR} loader_app
 }
 
-FONTS_DIR = "${bindir}"
-FONTS_DIR:develop = "${datadir}/content/data/app/cobalt/content"
+FONTS_DIR = "${datadir}/content/data/app/cobalt/content"
 
 do_install() {
     install -d ${D}${bindir}/native_target

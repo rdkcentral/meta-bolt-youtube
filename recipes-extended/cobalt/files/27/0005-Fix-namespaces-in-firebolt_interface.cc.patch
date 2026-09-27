@@ -1,0 +1,59 @@
+From d443d64928ec6a3976fa7961ece3e6a26255da34 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Sun, 27 Sep 2026 12:14:30 +0000
+Subject: [PATCH] Fix namespaces in firebolt_interface.cc
+
+---
+ .../rdk/shared/platform/firebolt_interface.cc     | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index abf3bb603c6e..c227979eda74 100644
+--- a/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -31,7 +31,8 @@
+ #include <cstring>
+ 
+ using namespace std::chrono_literals;
+-using starboard::shared::starboard::media::MimeSupportabilityCache;
++using ::starboard::ApplicationRdk;
++using ::starboard::MimeSupportabilityCache;
+ 
+ namespace third_party {
+ namespace starboard {
+@@ -343,8 +344,8 @@ void FireboltInterface::FireboltTextToSpeech::set_is_enabled(bool enabled) {
+       should_notify_app = true;
+     }
+   }
+-  if (should_notify_app && Application::Get()) {
+-    Application::Get()->InjectAccessibilityTextToSpeechSettingsChanged();
++  if (should_notify_app && ApplicationRdk::Get()) {
++    ApplicationRdk::Get()->InjectAccessibilityTextToSpeechSettingsChanged();
+   }
+ }
+ 
+@@ -415,8 +416,8 @@ void FireboltInterface::FireboltAccessibility::set_high_contrast_ui(bool enabled
+       should_notify_app = true;
+     }
+   }
+-  if (should_notify_app && Application::Get()) {
+-    Application::Get()->InjectAccessibilitySettingsChanged();
++  if (should_notify_app && ApplicationRdk::Get()) {
++    ApplicationRdk::Get()->InjectAccessibilitySettingsChanged();
+   }
+ }
+ 
+@@ -429,8 +430,8 @@ void FireboltInterface::FireboltAccessibility::set_cc_enabled(bool enabled) {
+       should_notify_app = true;
+     }
+   }
+-  if (should_notify_app && Application::Get()) {
+-    Application::Get()->InjectAccessibilityCaptionSettingsChanged();
++  if (should_notify_app && ApplicationRdk::Get()) {
++    ApplicationRdk::Get()->InjectAccessibilityCaptionSettingsChanged();
+   }
+ }
+ 
+-- 
+2.25.1
+

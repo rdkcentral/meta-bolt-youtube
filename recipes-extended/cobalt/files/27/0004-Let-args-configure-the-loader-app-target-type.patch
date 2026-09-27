@@ -1,0 +1,32 @@
+From 934c49896056d91bd66be7fa1aeba392535f5d6d Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Fri, 28 Aug 2026 18:05:45 +0200
+Subject: [PATCH 5/5] Let args configure the loader app target type
+
+This change allows to override the value from args.
+
+The default is unaffected.
+
+Cobalt sets the same value as a build argument in
+cobalt/build/configs/evergreen-arm-hardfp-rdk/args.gn
+
+See: https://github.com/youtube/cobalt/commit/f3053c0f9e277d8d189d5e2cf6898317fd296a84#diff-22699692ab11555e94c7d8e8b7543b688ed9fb8ee3bc07e27d0ae05cfc82020bR9
+
+Cherry picked from https://github.com/rdkcentral/larboard/commit/f037581a2c3042d817d366a50cd0dca222b60e6a
+---
+ .../rdk/shared/platform_configuration/configuration.gni          | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform_configuration/configuration.gni b/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform_configuration/configuration.gni
+index c17882d4a374..6dc79c565743 100644
+--- a/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform_configuration/configuration.gni
++++ b/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/platform_configuration/configuration.gni
+@@ -54,5 +54,4 @@ size_config_path =
+ 
+ if (is_starboard) {
+   sb_evergreen_compatible_use_libunwind = true
+-  starboard_level_final_executable_type = "shared_library"
+ }
+-- 
+2.43.0
+
