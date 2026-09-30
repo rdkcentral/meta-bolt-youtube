@@ -1,11 +1,29 @@
+<?xml version='1.0' encoding='UTF-8'?>
 <manifest>
-  <remote name="rdkcentral" fetch="https://github.com/rdkcentral/"/>
+  <remote fetch="https://github.com/rdkcentral" name="rdkcentral" review="https://github.com/rdkcentral"/>
+  <default revision="main" remote="rdkcentral" sync-j="4" />
 
-<!-- 2026Q2 release -->
-  <project remote="rdkcentral" name="meta-rdk" upstream="main" revision="refs/tags/1.20.0" path="meta-rdk"/>
-  <project remote="rdkcentral" name="meta-rdk-video" upstream="main" revision="refs/tags/1.20.0" path="meta-rdk-video"/>
-  <project remote="rdkcentral" name="meta-rdk-auxiliary" upstream="main" revision="refs/tags/1.9.0" path="meta-rdk-auxiliary"/>
-  <project remote="rdkcentral" name="meta-rdk-oss-reference" upstream="main" revision="refs/tags/4.13.0" path="meta-rdk-oss-reference"/>
+  <project groups="bolt"
+           path="bolt"
+           name="meta-bolt-distro"
+           remote="rdkcentral"
+           revision="refs/tags/0.4.0"/>
 
-  <project remote="rdkcentral" name="meta-bolt-distro" upstream="main" revision="refs/tags/0.4.0" path="bolt"/>
+  <project groups="rdk"
+           name="meta-rdk-video"
+           path="meta-rdk-video"
+           remote="rdkcentral"
+           revision="feature/RDKEMW-25143-x64-target"/>
+
+  <project groups="rdk"
+           name="meta-rdk-auxiliary"
+           path="meta-rdk-auxiliary"
+           remote="rdkcentral"
+           revision="refs/tags/1.10.0"/>
+
+  <project groups="rdk"
+           name="meta-rdk-oss-reference"
+           path="meta-rdk-oss-reference"
+           remote="rdkcentral"
+           revision="refs/tags/4.14.1"/>
 </manifest>

@@ -4,6 +4,7 @@
   "versionName": "develop",
   "name": "Cobalt 27",
   "packageType": "runtime",
+  "packageSpecifier": "cobalt",
   "entryPoint": "/usr/bin/loader_app",
   "dependencies": {
     "com.rdkcentral.base": "0.4.1"

@@ -1,4 +1,4 @@
-require libloader-app_25.lts.stable.bb
+require recipes-extended/cobalt/libloader-app_25.lts.stable.bb
 
 SUMMARY = "Evergreen Cobalt loader_app library with experimental extensions"
 
