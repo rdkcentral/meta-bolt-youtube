@@ -1,0 +1,25 @@
+From 33afd89863a616e907f1c129ddd7e92ddcc1ef3a Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Wed, 29 Jul 2026 22:31:51 +0200
+Subject: [PATCH 4/4] Fix audio ports type
+
+---
+ .../rdk/src/third_party/starboard/rdk/shared/rdkservices.cc     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/rdkservices.cc b/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/rdkservices.cc
+index 757d884f403b..bf87b1aa47a7 100644
+--- a/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/rdkservices.cc
++++ b/starboard/contrib/rdk/src/third_party/starboard/rdk/shared/rdkservices.cc
+@@ -1371,7 +1371,7 @@ void DeviceInfoImpl::Refresh() {
+   }
+ 
+   using namespace WPEFramework::JsonData::DeviceInfo;
+-  SupportedaudioportsData audio_ports;
++  SupportedAudioPortsResultData audio_ports;
+   rc = device_info_.Get(timeout.value(), "supportedaudioports", audio_ports);
+   if (Core::ERROR_NONE != rc) {
+     SB_LOG(ERROR) << "'" << kDeviceInfoCallsign << ".supportedaudioports' failed, rc = " << rc
+-- 
+2.43.0
+
