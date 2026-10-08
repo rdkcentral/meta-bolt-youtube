@@ -10,4 +10,4 @@ IMAGE_INSTALL += "gstreamer1.0-plugins-base-audioconvert"
 IMAGE_INSTALL += "gstreamer1.0-plugins-base-typefindfunctions"
 IMAGE_INSTALL += "gstreamer1.0-plugins-good-autodetect"
 
-IMAGE_INSTALL += "virtual/cobalt-evergreen"
+IMAGE_INSTALL += "cobalt-evergreen-pbt-27.lts"
