@@ -1,0 +1,71 @@
+From 645cac8fbdf3c86854c2206f90427bbfc7a97f26 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <adam_stolcenburg@comcast.com>
+Date: Mon, 27 Apr 2026 14:14:45 +0200
+Subject: [PATCH 4/5] RDKEAPPRT-615 Add experimental DIAL support
+
+---
+ .../rdk/shared/platform/firebolt_interface.cc | 33 +++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index 192be17..f72dda2 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -195,6 +195,14 @@ class FireboltInterface::FireboltLifecycle {
+       }
+     }
+ 
++    static void handleIntent(const Firebolt::Actions::Intent& intent) {
++      const std::string& action = intent.intent.action;
++      if (!action.empty() && action != "null") {
++        SB_LOG(INFO) << "received intent id = " << intent.intentId << ", action = " << action;
++        Application::Get()->Link(action.c_str());
++      }
++    }
++
+   public:
+     void init() {
+       using namespace Firebolt;
+@@ -214,6 +222,31 @@ class FireboltInterface::FireboltLifecycle {
+         SB_LOG(ERROR) << "presentation.subscribeOnFocusedChanged failed, error code = " << result.error();
+       }
+ 
++      auto is_focused = presentation.focused();
++
++      if (!is_focused) {
++        SB_LOG(ERROR) << "presentation.focused() failed, error code = " << is_focused.error();
++      } else {
++        SB_LOG(INFO) << "presentation.focused(): " << (*is_focused ? "true" : "false");
++        std::lock_guard<std::mutex> lock(mutex_);
++        is_focused_ = *is_focused;
++      }
++
++      auto &actions = IFireboltAccessor::Instance().ActionsInterface();
++
++      result = actions.subscribeOnIntent([this](const Actions::Intent& intent) {
++        handleIntent(intent);
++      });
++
++      auto intent = actions.intent();
++
++      if (!intent) {
++        SB_LOG(ERROR) << "actions.intent() failed, error code = " << intent.error();
++      } else {
++        SB_LOG(INFO) << "actions.intent(): id = " << intent->intentId << ", action = " << intent->intent.action;
++        handleIntent(*intent);
++      }
++
+       auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
+ 
+       result = lifecycle.subscribeOnStateChanged([this](const std::vector<Lifecycle::StateChange>& changes) {
+@@ -725,6 +758,7 @@ bool FireboltInterface::lazy_init() {
+   })();
+ 
+   Firebolt::Config cfg { };
++  cfg.log.level = Firebolt::LogLevel::Debug;
+   cfg.wsUrl = kFireboltEndpoint;
+   cfg.legacyRPCv1 = kEnableLegacyRPCv1;
+ #if !defined(COBALT_BUILD_TYPE_GOLD)
+-- 
+2.43.0
+
