@@ -161,7 +161,7 @@ do_compile() {
     autoninja -C ${COBALT_OUT_DIR} loader_app
 }
 
-FONTS_DIR = "${datadir}/content/data/app/cobalt/content"
+FONTS_DIR = "${datadir}/content/data"
 
 do_install() {
     install -d ${D}${bindir}/native_target
