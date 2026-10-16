@@ -1,0 +1,1147 @@
+From 5d47ba3052961ab4bdff671e2fb93e158b45bd67 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 15 Oct 2026 10:54:38 -0400
+Subject: [PATCH 2/2] Parse Action.intent and dispatch as deeplink
+
+---
+ src/third_party/starboard/rdk/shared/BUILD.gn |  11 +-
+ .../starboard/rdk/shared/application_rdk.h    |   2 +
+ .../shared/platform/firebolt_intentparams.cc  | 304 ++++++++++++++++++
+ .../shared/platform/firebolt_intentparams.h   | 104 ++++++
+ .../rdk/shared/platform/firebolt_lifecycle.cc |  72 +++--
+ .../rdk/shared/platform/firebolt_lifecycle.h  |  11 +-
+ .../rdk/shared/platform/firebolt_utility.cc   |  89 +++++
+ .../rdk/shared/platform/firebolt_utility.h    |   8 +
+ src/third_party/starboard/rdk/shared/uri.cc   | 200 ++++++++++++
+ src/third_party/starboard/rdk/shared/uri.h    | 103 ++++++
+ 10 files changed, 878 insertions(+), 26 deletions(-)
+ create mode 100644 src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.cc
+ create mode 100644 src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.h
+ create mode 100644 src/third_party/starboard/rdk/shared/uri.cc
+ create mode 100644 src/third_party/starboard/rdk/shared/uri.h
+
+diff --git a/src/third_party/starboard/rdk/shared/BUILD.gn b/src/third_party/starboard/rdk/shared/BUILD.gn
+index da0229d..8073072 100644
+--- a/src/third_party/starboard/rdk/shared/BUILD.gn
++++ b/src/third_party/starboard/rdk/shared/BUILD.gn
+@@ -273,6 +273,8 @@ static_library("starboard_platform") {
+     "system/system_properties_override.cc",
+     "system/system_properties_override.h",
+     "time_zone_get_name.cc",
++    "uri.cc",
++    "uri.h",
+     "window/window_create.cc",
+     "window/window_destroy.cc",
+     "window/window_get_diagonal_size_in_inches.cc",
+@@ -297,8 +299,13 @@ static_library("starboard_platform") {
+     "dl",
+   ]
+ 
++  deps = [
++    "//third_party/jsoncpp",
++  ]
++
+   configs += [
+     "//starboard/build/config:starboard_implementation",
++    "//third_party/jsoncpp:jsoncpp_config",
+     ":glib",
+     ":gstreamer",
+     ":wpeframework",
+@@ -331,6 +338,8 @@ static_library("starboard_platform") {
+       "platform/firebolt_interface.h",
+       "platform/firebolt_lifecycle.cc",
+       "platform/firebolt_lifecycle.h",
++      "platform/firebolt_intentparams.cc",
++      "platform/firebolt_intentparams.h",
+       "platform/firebolt_utility.cc",
+       "platform/firebolt_utility.h",
+     ]
+@@ -361,7 +370,7 @@ static_library("starboard_platform") {
+   ]
+ 
+   if (sb_evergreen_compatible_use_libunwind) {
+-    deps = [ "//third_party/llvm-project/libunwind:unwind_starboard" ]
++    deps += [ "//third_party/llvm-project/libunwind:unwind_starboard" ]
+   }
+ }
+ 
+diff --git a/src/third_party/starboard/rdk/shared/application_rdk.h b/src/third_party/starboard/rdk/shared/application_rdk.h
+index 2a92393..59eae1b 100644
+--- a/src/third_party/starboard/rdk/shared/application_rdk.h
++++ b/src/third_party/starboard/rdk/shared/application_rdk.h
+@@ -74,6 +74,8 @@ class Application : public ::starboard::QueueApplication {
+   bool IsPreloadImmediate() override { return HasPreloadSwitch() || preload_immediate_; }
+   void SetPreloadImmediate() { preload_immediate_ = true; }
+ 
++  using ::starboard::Application::SetStartLink;
++
+  protected:
+   // --- Application overrides ---
+   void Initialize() override;
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.cc
+new file mode 100644
+index 0000000..b8cbc1f
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.cc
+@@ -0,0 +1,304 @@
++#include "third_party/starboard/rdk/shared/platform/firebolt_intentparams.h"
++#include "third_party/starboard/rdk/shared/platform/firebolt_utility.h"
++
++#include "third_party/jsoncpp/source/include/json/reader.h"
++#include "third_party/jsoncpp/source/include/json/value.h"
++#include "third_party/starboard/rdk/shared/log_override.h"
++
++using namespace Firebolt;
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++namespace platform {
++
++namespace {
++
++const char kActionKey[]  = "action";
++const char kDataKey[]    = "data";
++const char kContextKey[] = "context";
++const char kQueryKey[]   = "query";
++const char kSourceKey[]  = "source";
++const char kInAppKey[]   = "in-app";
++const char kEntityKey[]  = "entity";
++const char kEntityTypeKey[] = "entityType";
++const char kEntityIdKey[] = "entityId";
++const char kAdditionalDataUrlKey[] = "additionalDataUrl";
++const char kDialPayloadKey[] = "dialPayload";
++
++const std::map<std::string_view, IntentParams::Action> kActionTypeMap = {
++  {"pre-load",   IntentParams::Action::PreLoad},
++  {"home",       IntentParams::Action::Home},
++  {"launch",     IntentParams::Action::Launch},
++  {"search",     IntentParams::Action::Search},
++  {"play-query", IntentParams::Action::PlayQuery},
++  {"play-entity",IntentParams::Action::PlayEntity},
++  {"skip-ad",    IntentParams::Action::SkipAd},
++  {"next",       IntentParams::Action::Next},
++  {"previous",   IntentParams::Action::Previous},
++};
++
++const std::map<std::string_view, IntentParams::Source> kSourceTypeMap = {
++  {"voice",     IntentParams::Source::Voice},
++  {"editorial", IntentParams::Source::Editorial},
++  {"dial",      IntentParams::Source::Dial},
++  {"system",    IntentParams::Source::System},
++  {"apps_rail", IntentParams::Source::AppsRail},
++  {"remote",    IntentParams::Source::Remote},
++};
++
++const std::map<std::string_view, IntentParams::EntityType> kEntityTypeMap = {
++  {"playlist",  IntentParams::EntityType::Playlist},
++};
++
++std::string to_lower(const std::string_view str) {
++  std::string result{str.begin(), str.end()};
++  std::transform(result.begin(), result.end(), result.begin(),
++                 [](unsigned char c) { return std::tolower(c); });
++  return result;
++}
++
++IntentParams::Action action_from_string(const std::string_view str) {
++  std::string action = to_lower(str);
++  if (auto it = kActionTypeMap.find(action); it != kActionTypeMap.end()) {
++    return it->second;
++  } else {
++    SB_LOG(WARNING) << "unrecognized intent action: " << str;
++  }
++  return IntentParams::Action::Other;
++}
++
++IntentParams::Source source_from_string(const std::string_view str) {
++  std::string source = to_lower(str);
++  if (auto it = kSourceTypeMap.find(source); it != kSourceTypeMap.end()) {
++    return it->second;
++  } else {
++    SB_LOG(WARNING) << "unrecognized intent source: " << str;
++  }
++  return IntentParams::Source::Other;
++}
++
++IntentParams::EntityType entity_type_from_string(const std::string_view str) {
++  std::string entity_type = to_lower(str);
++  if (auto it = kEntityTypeMap.find(entity_type); it != kEntityTypeMap.end()) {
++    return it->second;
++  } else {
++    SB_LOG(WARNING) << "unrecognized entity type: " << str;
++  }
++  return IntentParams::EntityType::Other;
++}
++
++IntentParams::Data parse_intent_data(const Json::Value& data_json) {
++  if (data_json.isMember(kQueryKey)) {
++    return IntentParams::QueryData {
++      .query = data_json[kQueryKey].asString()
++    };
++  }
++  else if (data_json.isMember(kEntityKey)) {
++    const Json::Value& entity_json = data_json[kEntityKey];
++    return IntentParams::PlayEntityData {
++      .entity = {
++        .entityId = entity_json[kEntityIdKey].asString(),
++        .entityType = entity_type_from_string(entity_json[kEntityTypeKey].asString()),
++      }
++    };
++  }
++  else if (data_json.isMember(kAdditionalDataUrlKey)) {
++    std::string additionalDataUrl = data_json[kAdditionalDataUrlKey].asString();
++    std::string dialPayload = data_json[kDialPayloadKey].asString();
++    return IntentParams::DialData {
++      .dialPayload = std::move(dialPayload),
++      .additionalDataUrl = std::move(additionalDataUrl)
++    };
++  }
++  return std::monostate{};
++}
++
++}  // namespace
++
++bool IntentParams::isValid() const {
++  if (action == Action::PreLoad)
++    return true;
++
++  const auto check_source_action = [this](){
++    switch (context.source) {
++      case Source::Editorial:
++      case Source::Dial:
++        return action == Action::Launch;
++      case Source::Voice:
++        return (action == Action::Search ||
++                action == Action::PlayQuery ||
++                action == Action::Launch ||
++                action == Action::SkipAd ||
++                action == Action::Next ||
++                action == Action::Previous);
++      case Source::Other:
++        return (action == Action::Search ||
++                action == Action::PlayEntity ||
++                action == Action::Launch);
++      default:
++        break;
++    }
++    return true;
++  };
++
++  if (!check_source_action())
++    return false;
++
++  if (context.source == Source::Dial)
++    return data.has_value() && std::holds_alternative<IntentParams::DialData>(*data);
++
++  if (action == Action::Search || action == Action::PlayQuery)
++    return data.has_value() && std::holds_alternative<IntentParams::QueryData>(*data);
++
++  if (action == Action::PlayEntity)
++    return data.has_value() && std::holds_alternative<IntentParams::PlayEntityData>(*data);
++
++  return true;
++}
++
++UriQuery IntentParams::toUriQuery(bool is_focused) const {
++  UriQuery result;
++
++  if (context.source == Source::Voice) {
++    result.add("utm_content", "v");
++    result.add("launch", "voice");
++    result.add("launch_tag", "voice");
++    result.add("vs","0");
++    result.add("inApp", context.in_app.value_or(is_focused) ? "true" : "false");
++
++    switch(action) {
++      case Action::Search: {
++        const auto& data_query = std::get<IntentParams::QueryData>(*data);
++        result.add("va", "search");
++        result.add("vaa", data_query.query);
++        break;
++      }
++      case Action::PlayQuery: {
++        const auto& data_query = std::get<IntentParams::QueryData>(*data);
++        result.add("va", "play");
++        result.add("vaa", data_query.query);
++        break;
++      }
++      case Action::SkipAd:
++        result.add("va", "skipAd");
++        break;
++      case Action::Next:
++        result.add("va", "mediaNextVideo");
++        break;
++      case Action::Previous:
++        result.add("va", "mediaPreviousVideo");
++        break;
++      case Action::Launch:
++      default:
++        break;
++    }
++  }
++  else if (context.source == Source::Dial) {
++    const auto &dial_data = std::get<IntentParams::DialData>(*data);
++    result.add("utm_content", "d");
++    result.add("launch", "dial");
++    result.add("additionalDataUrl", dial_data.additionalDataUrl);
++    result.add("dialPayload", dial_data.dialPayload);
++  }
++  else {
++    switch(action) {
++      case Action::Search: {
++        const auto& data_query = std::get<IntentParams::QueryData>(*data);
++        result.add("utm_content", "s");
++        result.add("launch", "search");
++        result.add("q", data_query.query);
++        break;
++      }
++      case Action::PlayEntity: {
++        const auto &playentity_data = std::get<IntentParams::PlayEntityData>(*data);
++        result.add("utm_content", "l");
++        result.add("launch", "launcher");
++        if (playentity_data.entity.entityType == EntityType::Playlist)
++          result.add("list", playentity_data.entity.entityId);
++        else
++          result.add("v", playentity_data.entity.entityId);
++        break;
++      }
++      case Action::Launch: {
++        if (context.source == Source::Editorial) {
++          result.add("utm_content", "g");
++          result.add("launch", "guide");
++        }
++        else if (context.source == Source::Remote) {
++          result.add("utm_content", "r");
++          result.add("launch", "remote");
++        }
++        else {
++          result.add("utm_content", "m");
++          result.add("launch", "menu");
++        }
++        break;
++      }
++      default:
++        SB_LOG(WARNING) << "Unsupported intent action=" << action
++                        << " for intent source=" << context.source;
++        break;
++    }
++  }
++
++  return result;
++}
++
++// static
++Firebolt::Result<IntentParams> IntentParams::fromString(std::string_view json) {
++  SB_LOG(INFO) << "parsing intent: " << json;
++
++  Json::Reader reader;
++  Json::Value intent_obj;
++
++  if (!reader.parse(json.data(), json.data() + json.size(), intent_obj)) {
++    auto code = Firebolt::Error::InvalidParams;
++    return Firebolt::Result<IntentParams>{
++      code, Firebolt::ErrorInfo {static_cast<int32_t>(code), reader.getFormattedErrorMessages()} };
++  }
++
++  if (!intent_obj.isMember(kActionKey) || !intent_obj.isMember(kContextKey) ) {
++    auto code = Firebolt::Error::InvalidParams;
++    return Firebolt::Result<IntentParams>{
++      code, Firebolt::ErrorInfo {static_cast<int32_t>(code), "missing required fields"} };
++  }
++
++  const Json::Value& context_obj = intent_obj[kContextKey];
++  if (!context_obj.isObject() || !context_obj.isMember(kSourceKey)) {
++    auto code = Firebolt::Error::InvalidParams;
++    return Firebolt::Result<IntentParams>{
++      code, Firebolt::ErrorInfo {static_cast<int32_t>(code), "missing required fields in context object"} };
++  }
++
++  IntentParams result{};
++  result.action = action_from_string(intent_obj[kActionKey].asString());
++  result.context.source = source_from_string(context_obj[kSourceKey].asString());
++
++  if (context_obj.isMember(kInAppKey)) {
++    result.context.in_app = context_obj[kInAppKey].asBool();
++  }
++
++  if (intent_obj.isMember(kDataKey)) {
++    result.data = parse_intent_data(intent_obj[kDataKey]);
++  }
++
++  SB_LOG(INFO) << "Parsed intent: " << result;
++
++  SB_DCHECK(result.isValid());
++  if (!result.isValid()) {
++    auto code = Firebolt::Error::InvalidParams;
++    return Firebolt::Result<IntentParams>{
++      code, Firebolt::ErrorInfo {static_cast<int32_t>(code),
++        "unsupported combination of intent action, source and data"} };
++  }
++
++  return Firebolt::Result<IntentParams>{ result };
++}
++
++}  // namespace platform
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.h b/src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.h
+new file mode 100644
+index 0000000..27e6221
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_intentparams.h
+@@ -0,0 +1,104 @@
++//
++// Copyright 2025 Comcast Cable Communications Management, LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++// SPDX-License-Identifier: Apache-2.0
++
++#pragma once
++
++#include "starboard/configuration.h"
++
++#include "third_party/starboard/rdk/shared/uri.h"
++
++#include <firebolt/firebolt.h>
++#include <optional>
++#include <variant>
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++namespace platform {
++
++struct IntentParams {
++
++  enum class Action : uint32_t {
++    Other,
++    PreLoad,
++    Home,
++    Launch,
++    Search,
++    PlayEntity,
++    PlayQuery,
++    SkipAd,
++    Next,
++    Previous,
++  };
++
++  enum class Source : uint32_t {
++    Other,
++    Voice,
++    Editorial,
++    Dial,
++    System,
++    AppsRail,
++    Remote,
++  };
++
++  enum class EntityType : uint32_t {
++    Other,
++    Playlist
++  };
++
++  struct Context {
++    Source source;
++    std::optional<bool> in_app;
++  };
++
++  struct QueryData {
++    std::string query;
++  };
++
++  struct PlayEntityData {
++    struct {
++      std::string entityId;
++      EntityType entityType;
++    } entity;
++  };
++
++  struct DialData {
++    std::string dialPayload;
++    std::string additionalDataUrl;
++  };
++
++  using Data = std::variant<std::monostate,QueryData,PlayEntityData,DialData>;
++
++  Action action;
++  Context context;
++  std::optional<Data> data;
++
++  bool isValid() const;
++  UriQuery toUriQuery(bool is_focused) const;
++
++  static Firebolt::Result<IntentParams> fromString(std::string_view json);
++
++private:
++  IntentParams() = default;
++};
++
++}  // namespace platform
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc
+index 82efde6..2326b81 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc
+@@ -21,6 +21,9 @@
+ #include "third_party/starboard/rdk/shared/libcobalt.h"
+ #include "third_party/starboard/rdk/shared/log_override.h"
+ 
++#include <algorithm>
++#include <optional>
++#include <string_view>
+ #include <cstring>
+ 
+ using namespace Firebolt;
+@@ -33,7 +36,6 @@ namespace platform {
+ 
+ namespace {
+ 
+-const char kPreloadAction[] = "pre-load";
+ const char* kDefaultExitStrategy = "suspend";
+ 
+ } // namespace
+@@ -53,21 +55,23 @@ void FireboltLifecycle::teardown() {
+ }
+ 
+ void FireboltLifecycle::initialize() {
++  // TODO: get initial link from cli args
++  link_.setFromString("https://www.youtube.com/tv");
+ 
+   // Actions
+   {
+     auto &actions = IFireboltAccessor::Instance().ActionsInterface();
+-    auto result = actions.subscribeOnIntent([this](const Actions::Intent& intent){
+-      on_intent(intent);
+-    });
+-    if (!result) {
+-      SB_LOG(ERROR) << "actions.subscribeOnIntent failed, error code = " << result.error();
+-    }
+     auto intent = actions.intent();
+     if (!intent) {
+       SB_LOG(ERROR) << "actions.intent failed, error code = " << intent.error();
+     } else {
+-      on_intent(*intent);
++      onIntent(*intent, true);
++    }
++    auto result = actions.subscribeOnIntent([this](const Actions::Intent& intent){
++      onIntent(intent, false);
++    });
++    if (!result) {
++      SB_LOG(ERROR) << "actions.subscribeOnIntent failed, error code = " << result.error();
+     }
+   }
+ 
+@@ -79,7 +83,7 @@ void FireboltLifecycle::initialize() {
+         SB_LOG(INFO) << "lifecycle.OnStateChanged:"
+                      << " new_state=" << change.newState << ','
+                      << " old_state=" << change.oldState;
+-        on_state_change(change.newState, change.oldState);
++        onStateChange(change.newState, change.oldState);
+       }
+     });
+     if (!result) {
+@@ -92,7 +96,7 @@ void FireboltLifecycle::initialize() {
+     auto &presentation = IFireboltAccessor::Instance().PresentationInterface();
+     auto result = presentation.subscribeOnFocusedChanged([this](const bool focused) {
+       SB_LOG(INFO) << "presentation.onFocusedChanged: focused=" << focused;
+-      on_focused_changed(focused);
++      onFocusedChanged(focused);
+     });
+     if (!result) {
+       SB_LOG(ERROR) << "presentation.subscribeOnFocusedChanged failed, error code = " << result.error();
+@@ -115,33 +119,57 @@ void FireboltLifecycle::initialize() {
+   SbRdkSetCobaltExitStrategy(kDefaultExitStrategy);
+ }
+ 
+-void FireboltLifecycle::on_intent(const Firebolt::Actions::Intent& intent) {
++void FireboltLifecycle::onIntent(const Firebolt::Actions::Intent& intent, bool is_initial) {
+   std::unique_lock<std::mutex> lock { mutex_ };
+   if (last_intent_id_ == intent.intentId)
+     return;
+ 
++  auto intent_params = IntentParams::fromString(intent.intent);
++  if (!intent_params) {
++    SB_LOG(INFO) << "Failed to parse actions.intent '" << intent.intent << "', "
++                 << "error = " << intent_params.error() << ", error info = "
++                 << intent_params.errorInfo();
++    return;
++  }
++
+   auto* app = Application::Get();
+ 
+-  bool has_preload_action = (0 == strncasecmp(intent.intent.action.c_str(), kPreloadAction, strlen(kPreloadAction)));
+-  if (has_preload_action && lifecycle_state_ == Lifecycle::LifecycleState::INITIALIZING) {
+-    SB_LOG(INFO) << "Setting preload immediate";
+-    app->SetPreloadImmediate();
+-  }
++  bool has_preload_action = (intent_params->action == IntentParams::Action::PreLoad);
++  if (has_preload_action) {
++    if (lifecycle_state_ == Lifecycle::LifecycleState::INITIALIZING) {
++      SB_LOG(INFO) << "Setting preload immediate";
++      app->SetPreloadImmediate();
++    } else {
++      SB_LOG(WARNING) << "Ignoring 'pre-load' intent(" << *intent_params
++                      << "), while in state=" << lifecycle_state_;
++    }
++  } else {
++    link_.setQuery(intent_params->toUriQuery(is_focused_));
+ 
+-  // TODO: create and set deep link from intent data query
++    auto link = link_.toString();
++    if (is_initial) {
++      SB_LOG(INFO) << "App::SetStartLink uri=" << link;
++      app->SetStartLink(link.c_str());
++    } else {
++      SB_LOG(INFO) << "App::Link uri=" << link;
++      app->Link(link.c_str());
++    }
++  }
+ 
+   // if 'pre-load' intent got cleared then reveal the app to start rendering
+   // to drive the platform lifecycle to Active
+-  if (has_preload_action_ && !has_preload_action && lifecycle_state_ == Lifecycle::LifecycleState::PAUSED) {
+-    SB_LOG(INFO) << "App::Reveal";
+-    app->Reveal(nullptr, nullptr);
++  if (has_preload_action_ && !has_preload_action) {
++    if (lifecycle_state_ == Lifecycle::LifecycleState::PAUSED) {
++      SB_LOG(INFO) << "App::Reveal";
++      app->Reveal(nullptr, nullptr);
++    }
+   }
+ 
+   last_intent_id_ = intent.intentId;
+   has_preload_action_ = has_preload_action;
+ }
+ 
+-void FireboltLifecycle::on_state_change(Lifecycle::LifecycleState new_state, Lifecycle::LifecycleState old_state) {
++void FireboltLifecycle::onStateChange(Lifecycle::LifecycleState new_state, Lifecycle::LifecycleState old_state) {
+   std::unique_lock<std::mutex> lock { mutex_ };
+   if (lifecycle_state_ == new_state)
+     return;
+@@ -227,7 +255,7 @@ void FireboltLifecycle::on_state_change(Lifecycle::LifecycleState new_state, Lif
+   }
+ }
+ 
+-void FireboltLifecycle::on_focused_changed(const bool focused) {
++void FireboltLifecycle::onFocusedChanged(const bool focused) {
+   std::unique_lock<std::mutex> lock { mutex_ };
+   if (is_focused_ == focused)
+     return;
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h
+index 7ec04b4..f340dac 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h
+@@ -18,6 +18,9 @@
+ #pragma once
+ 
+ #include "starboard/configuration.h"
++
++#include "third_party/starboard/rdk/shared/uri.h"
++
+ #include <firebolt/firebolt.h>
+ #include <mutex>
+ 
+@@ -32,19 +35,21 @@ public:
+   void initialize();
+   void teardown();
+ private:
+-  void on_state_change(
++  void onStateChange(
+     Firebolt::Lifecycle::LifecycleState new_state,
+     Firebolt::Lifecycle::LifecycleState old_state);
+ 
+-  void on_intent(const Firebolt::Actions::Intent& intent);
++  void onIntent(const Firebolt::Actions::Intent& intent, bool is_initial);
+ 
+-  void on_focused_changed(const bool);
++  void onFocusedChanged(const bool);
+ 
+   std::mutex mutex_;
+   Firebolt::Lifecycle::LifecycleState lifecycle_state_ { Firebolt::Lifecycle::LifecycleState::INITIALIZING };
+   bool is_focused_ { false };
+   bool has_preload_action_ { false };
+   uint32_t last_intent_id_ { -1u };
++  Uri link_ {};
++
+ };
+ 
+ }  // namespace platform
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc
+index debefdb..0cc7c41 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc
+@@ -18,6 +18,9 @@
+ #include "third_party/starboard/rdk/shared/platform/firebolt_utility.h"
+ #include "third_party/starboard/rdk/shared/log_override.h"
+ 
++template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
++template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
++
+ namespace third_party {
+ namespace starboard {
+ namespace rdk {
+@@ -49,6 +52,10 @@ std::ostream& operator<<(std::ostream& out, const Firebolt::Error& e) {
+   return out << to_string(e) << '(' << static_cast<int32_t>(e) << ')';
+ }
+ 
++std::ostream& operator<<(std::ostream& out, const Firebolt::ErrorInfo& info) {
++  return out << info.message();
++}
++
+ std::ostream& operator<<(std::ostream& out, const Firebolt::Lifecycle::LifecycleState& state) {
+   const auto to_string = [](const Firebolt::Lifecycle::LifecycleState& state) {
+     switch(state) {
+@@ -69,6 +76,88 @@ std::ostream& operator<<(std::ostream& out, const Firebolt::Lifecycle::Lifecycle
+   return out << to_string(state) << '(' << static_cast<int32_t>(state) << ')';
+ }
+ 
++std::ostream& operator<<(std::ostream& out, const IntentParams::Action& action) {
++  const auto to_string = [](const IntentParams::Action& action) {
++    switch(action) {
++#define CASE(x) case IntentParams::Action::x: return #x
++      CASE(PreLoad);
++      CASE(Home);
++      CASE(Launch);
++      CASE(Search);
++      CASE(PlayEntity);
++      CASE(PlayQuery);
++      CASE(SkipAd);
++      CASE(Next);
++      CASE(Previous);
++      CASE(Other);
++#undef CASE
++    }
++  };
++
++  return out << to_string(action) << '(' << static_cast<uint32_t>(action) << ')';
++}
++
++std::ostream& operator<<(std::ostream& out, const IntentParams::Source& source) {
++  const auto to_string = [](const IntentParams::Source& source) {
++    switch(source) {
++#define CASE(x) case IntentParams::Source::x: return #x
++      CASE(Voice);
++      CASE(Editorial);
++      CASE(Dial);
++      CASE(System);
++      CASE(AppsRail);
++      CASE(Remote);
++      CASE(Other);
++#undef CASE
++    }
++  };
++
++  return out << to_string(source) << '(' << static_cast<uint32_t>(source) << ')';
++}
++
++std::ostream& operator<<(std::ostream& out, const IntentParams::EntityType& entity_type) {
++  const auto to_string = [](const IntentParams::EntityType& entity_type) {
++    switch(entity_type) {
++#define CASE(x) case IntentParams::EntityType::x: return #x
++      CASE(Playlist);
++      CASE(Other);
++#undef CASE
++    }
++  };
++
++  return out << to_string(entity_type) << '(' << static_cast<uint32_t>(entity_type) << ')';
++}
++
++std::ostream& operator<<(std::ostream& out, const IntentParams::Data& data) {
++  std::visit(overloaded{
++      [&out](const std::monostate&) {
++        out << "{}";
++      },
++      [&out](const IntentParams::DialData& data_dial) {
++        out << "{\"dialPayload\": \"" << data_dial.dialPayload << "\","
++            << " \"additionalDataUrl\": \"" << data_dial.additionalDataUrl << "\"}";
++      },
++      [&out](const IntentParams::PlayEntityData& data_playentity) {
++        out << "{\"entity\":{\"entityId\": \"" << data_playentity.entity.entityId << "\","
++            << "\"entityType\":\"" << data_playentity.entity.entityType << "\"}}";
++      },
++      [&out](const IntentParams::QueryData& data_query) {
++        out << "{\"query\": \"" << data_query.query << "\"}";
++      }
++    }, data);
++  return out;
++}
++
++std::ostream& operator<<(std::ostream& out, const IntentParams& intent) {
++  out << "action = " << intent.action
++      << ", source = " << intent.context.source;
++  if (intent.context.in_app.has_value())
++    out << ", in_app = " << intent.context.in_app.value();
++  if (intent.data.has_value())
++    out << ", data = " << intent.data.value();
++  return out;
++}
++
+ }  // namespace platform
+ }  // namespace shared
+ }  // namespace rdk
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_utility.h b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.h
+index 8befe0d..644776c 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_utility.h
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.h
+@@ -19,6 +19,8 @@
+ 
+ #include "starboard/common/log.h"
+ 
++#include "third_party/starboard/rdk/shared/platform/firebolt_intentparams.h"
++
+ #include <firebolt/firebolt.h>
+ 
+ namespace third_party {
+@@ -28,7 +30,13 @@ namespace shared {
+ namespace platform {
+ 
+ std::ostream& operator<<(std::ostream& out, const Firebolt::Error& e);
++std::ostream& operator<<(std::ostream& out, const Firebolt::ErrorInfo& info);
+ std::ostream& operator<<(std::ostream& out, const Firebolt::Lifecycle::LifecycleState& state);
++std::ostream& operator<<(std::ostream& out, const IntentParams::Action& action);
++std::ostream& operator<<(std::ostream& out, const IntentParams::Source& source);
++std::ostream& operator<<(std::ostream& out, const IntentParams::EntityType& entity_type);
++std::ostream& operator<<(std::ostream& out, const IntentParams::Data& data);
++std::ostream& operator<<(std::ostream& out, const IntentParams& intent);
+ 
+ }  // namespace platform
+ }  // namespace shared
+diff --git a/src/third_party/starboard/rdk/shared/uri.cc b/src/third_party/starboard/rdk/shared/uri.cc
+new file mode 100644
+index 0000000..311ab53
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/uri.cc
+@@ -0,0 +1,200 @@
++//
++// Copyright 2026 Comcast Cable Communications Management, LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++// SPDX-License-Identifier: Apache-2.0
++
++#include "third_party/starboard/rdk/shared/uri.h"
++
++#include "starboard/common/log.h"
++
++#include "third_party/starboard/rdk/shared/log_override.h"
++
++#include <algorithm>
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++
++UriQuery::UriQuery(const std::string& query_string) {
++  setFromRawQuery(query_string);
++}
++
++void UriQuery::clear() {
++  query_params_.clear();
++}
++
++void UriQuery::setFromRawQuery(const std::string& query_string) {
++  query_params_.clear();
++  if (query_string.empty())
++    return;
++
++  GError* error = nullptr;
++  GUriParamsIter iter;
++  gchar *key, *value;
++  g_uri_params_iter_init(&iter, query_string.c_str(), -1, "&", G_URI_PARAMS_NONE);
++  while (g_uri_params_iter_next(&iter, &key, &value, &error)) {
++    if (key) {
++      query_params_.emplace_back(
++        std::pair{std::string(key), value ? std::string{value}: std::string{}});
++    }
++    g_free(key);
++    g_free(value);
++  }
++  if (error) {
++    SB_LOG(WARNING) << "UriQuery: failed to parse query params '" << query_string << "': " << error->message;
++    g_error_free(error);
++  }
++}
++
++std::string UriQuery::itemValue(const std::string& key) const {
++  auto it = std::find_if(query_params_.begin(), query_params_.end(),
++                         [key](const auto& p) { return p.first == key; });
++  if (it != query_params_.end())
++    return it->second;
++  return {};
++}
++
++void UriQuery::add(const std::string& key, const std::string& value) {
++  query_params_.emplace_back(std::pair{key, value});
++}
++
++bool UriQuery::contains(const std::string& key) const {
++  auto it = std::find_if(query_params_.begin(), query_params_.end(),
++                         [key](const auto& p) { return p.first == key; });
++  return (it != query_params_.end());
++}
++
++std::string UriQuery::toString() const {
++  // Rebuild the query string, percent-encoding each token.
++  std::string query;
++  for (const auto& [key, value] : query_params_) {
++    if (!query.empty())
++      query += '&';
++
++    gchar* encodedKey = g_uri_escape_string(key.c_str(), nullptr, FALSE);
++    query += encodedKey;
++    g_free(encodedKey);
++
++    gchar* encodedValue = g_uri_escape_string(value.c_str(), nullptr, FALSE);
++    query += '=';
++    query += encodedValue;
++    g_free(encodedValue);
++  }
++  return query;
++}
++
++Uri::Uri(const std::string& uri_string) {
++  setFromString(uri_string);
++}
++
++Uri::~Uri() {
++  g_free(scheme_);
++  g_free(userinfo_);
++  g_free(host_);
++  g_free(path_);
++  g_free(fragment_);
++}
++
++void Uri::setScheme(const std::string& scheme) {
++  g_clear_pointer(&scheme_, g_free);
++  if (!scheme.empty())
++    scheme_ = g_strdup(scheme.c_str());
++}
++
++void Uri::setHost(const std::string& host) {
++  g_clear_pointer(&host_, g_free);
++  if (!host.empty())
++    host_ = g_strdup(host.c_str());
++}
++
++void Uri::setPort(gint port) {
++  port_ = port;
++}
++
++void Uri::setPath(const std::string& path) {
++  g_clear_pointer(&path_, g_free);
++  if (!path.empty())
++    path_ = g_strdup(path.c_str());
++}
++
++void Uri::setFromString(const std::string& uri_string) {
++  g_clear_pointer(&scheme_, g_free);
++  g_clear_pointer(&userinfo_, g_free);
++  g_clear_pointer(&host_, g_free);
++  g_clear_pointer(&path_, g_free);
++  g_clear_pointer(&fragment_, g_free);
++  port_ = -1;
++  query_.clear();
++
++  GError* error = nullptr;
++  gchar *scheme = nullptr, *userinfo = nullptr, *host = nullptr;
++  gchar *path = nullptr, *query = nullptr, *fragment = nullptr;
++  gint port = -1;
++
++  gboolean ok = g_uri_split(uri_string.c_str(), flags_, &scheme, &userinfo,
++                            &host, &port, &path, &query, &fragment, &error);
++  if (!ok) {
++    SB_LOG(WARNING) << "Uri: failed to parse '" << uri_string << "': " << error->message;
++    g_error_free(error);
++    g_free(scheme);
++    g_free(userinfo);
++    g_free(host);
++    g_free(path);
++    g_free(query);
++    g_free(fragment);
++    return;
++  }
++
++  scheme_ = scheme;
++  userinfo_ = userinfo;
++  host_ = host;
++  port_ = port;
++  path_ = path;
++  fragment_ = fragment;
++
++  if (query && *query)
++    query_.setFromRawQuery(query);
++  g_free(query);
++}
++
++std::string Uri::toString() const {
++  if (!scheme_)
++    return {};
++
++  std::string query = query_.toString();
++  std::string result;
++  gchar* str = g_uri_join(
++    flags_,
++    scheme_,
++    userinfo_,
++    host_,
++    port_,
++    path_ ? path_ : "",
++    query.empty() ? nullptr : query.c_str(),
++    fragment_);
++
++  if (str) {
++    result.assign(str);
++    g_free(str);
++  }
++
++  return result;
++}
++
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+diff --git a/src/third_party/starboard/rdk/shared/uri.h b/src/third_party/starboard/rdk/shared/uri.h
+new file mode 100644
+index 0000000..c0d741c
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/uri.h
+@@ -0,0 +1,103 @@
++//
++// Copyright 2026 Comcast Cable Communications Management, LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++// SPDX-License-Identifier: Apache-2.0
++#pragma once
++
++#include <glib.h>
++
++#include <string>
++#include <utility>
++#include <vector>
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++
++class UriQuery {
++ public:
++  UriQuery(const UriQuery&) = default;
++  UriQuery& operator=(const UriQuery&) = default;
++  UriQuery(UriQuery&&) = default;
++  UriQuery& operator=(UriQuery&&) = default;
++  UriQuery() = default;
++
++  explicit UriQuery(const std::string& query_string);
++
++  // Clear query params
++  void clear();
++
++  // Parse and set params from the query string.
++  void setFromRawQuery(const std::string& query_string);
++
++  // Returns query param value by key
++  std::string itemValue(const std::string& key) const;
++
++  // Append a query parameter.
++  void add(const std::string& key, const std::string& value);
++
++  // Returns true if URI query contains parameter.
++  bool contains(const std::string& key) const;
++
++  // Return the URI query as a string.
++  std::string toString() const;
++
++ private:
++  std::vector<std::pair<std::string, std::string>> query_params_;
++};
++
++class Uri {
++  // Non-copyable, non-movable
++  Uri(const Uri&) = delete;
++  Uri& operator=(const Uri&) = delete;
++  Uri(Uri&&) = delete;
++  Uri& operator=(Uri&&) = delete;
++
++public:
++  Uri() = default;
++  explicit Uri(const std::string& uri_string);
++  ~Uri();
++
++  void setFromString(const std::string&);
++  void setScheme(const std::string& scheme);
++  void setHost(const std::string& host);
++  void setPort(gint port);
++  void setPath(const std::string& path);
++
++  UriQuery& query() { return query_; }
++  const UriQuery& query() const { return query_; }
++
++  void setQuery(const UriQuery& q) { query_ = q; }
++  void setQuery(UriQuery&& q) { query_ = std::move(q); }
++
++  // Return the URI as a string.
++  std::string toString() const;
++
++private:
++  UriQuery query_;
++  GUriFlags flags_ = G_URI_FLAGS_ENCODED_QUERY;
++  gchar* scheme_ = nullptr;
++  gchar* userinfo_ = nullptr;
++  gchar* host_ = nullptr;
++  gint   port_ = -1;
++  gchar* path_ = nullptr;
++  gchar* fragment_ = nullptr;
++};
++
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+-- 
+2.44.4
+

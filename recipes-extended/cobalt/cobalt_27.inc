@@ -25,13 +25,16 @@ SRC_URI += "file://27/0003-Fix-location-of-src-folder.patch"
 SRC_URI += "file://27/0004-Disable-rewriting-of-paths-returned-by-pkg-config.patch"
 SRC_URI += "file://27/0005-Allow-starboard-implementation-set-rpath.patch"
 SRC_URI += "file://27/0006-Pickup-strip-binary-path-from-Yocto-environment.patch"
+SRC_URI += "file://27/exp/0001-RDKEMW-26804-Initial-implementation-of-Firebolt-Life.patch;patchdir=../larboard"
+SRC_URI += "file://27/exp/0002-Parse-Action.intent-and-dispatch-as-deeplink.patch;patchdir=../larboard"
 
 CR = "3"
 PR = "r${CR}"
 
 SRCREV_cobalt = "3befd332486952f6603ae3baf2a8713878d6e200"
 SRCREV_depottools = "2cea9cdd785391335d448773124631cb711225e2"
-SRCREV_larboard = "f296c2792a63bd3d34dba786c866ac7bdc9a5046"
+#SRCREV_larboard = "f296c2792a63bd3d34dba786c866ac7bdc9a5046"
+SRCREV_larboard = "4a751c8f98fb88eb4795b1137a5ca62ac2e20633"
 
 SRCREV_FORMAT = "cobalt_larboard"
 PV .= "+git${SRCPV}"
@@ -126,6 +129,7 @@ do_unpack_extra() {
     cd ${S}
     gclient sync -v --no-history -r ${SRCREV_cobalt}
     gclient runhooks -v
+    build/linux/sysroot_scripts/install-sysroot.py --arch=${TARGET_ARCH}
 
     bbnote "link larboard"
     ( cd "${S}/third_party/" && ln -sf ../../larboard/src/third_party/starboard . )

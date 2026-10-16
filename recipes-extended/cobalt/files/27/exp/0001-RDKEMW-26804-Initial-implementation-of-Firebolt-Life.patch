@@ -1,0 +1,809 @@
+From 3e89485cd74f48d1d04fa2036b6035258e945b8b Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 7 Oct 2026 13:51:05 -0400
+Subject: [PATCH 1/2] RDKEMW-26804: Initial implementation of Firebolt
+ Lifecycle
+
+---
+ src/third_party/starboard/rdk/shared/BUILD.gn |   8 +-
+ .../starboard/rdk/shared/application_rdk.cc   |   2 +
+ .../starboard/rdk/shared/application_rdk.h    |   6 +-
+ .../rdk/shared/platform/firebolt_interface.cc |  92 +++----
+ .../rdk/shared/platform/firebolt_interface.h  |   6 +
+ .../rdk/shared/platform/firebolt_lifecycle.cc | 251 ++++++++++++++++++
+ .../rdk/shared/platform/firebolt_lifecycle.h  |  54 ++++
+ .../rdk/shared/platform/firebolt_utility.cc   |  76 ++++++
+ .../rdk/shared/platform/firebolt_utility.h    |  37 +++
+ .../rdk/shared/platform/platform_interface.cc |   7 +
+ .../rdk/shared/platform/platform_interface.h  |   1 +
+ .../starboard/rdk/shared/rdkservices.cc       |   3 +
+ .../starboard/rdk/shared/rdkservices.h        |   1 +
+ 13 files changed, 487 insertions(+), 57 deletions(-)
+ create mode 100644 src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc
+ create mode 100644 src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h
+ create mode 100644 src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc
+ create mode 100644 src/third_party/starboard/rdk/shared/platform/firebolt_utility.h
+
+diff --git a/src/third_party/starboard/rdk/shared/BUILD.gn b/src/third_party/starboard/rdk/shared/BUILD.gn
+index cbbef33..da0229d 100644
+--- a/src/third_party/starboard/rdk/shared/BUILD.gn
++++ b/src/third_party/starboard/rdk/shared/BUILD.gn
+@@ -33,8 +33,8 @@ import("//build/config/linux/pkg_config.gni")
+ declare_args() {
+   rdk_enable_securityagent = false
+   rdk_enable_ocdm = true
+-  rdk_enable_firebolt_api = false
+-  rdk_enable_firebolt_lifecycle = false
++  rdk_enable_firebolt_api = true
++  rdk_enable_firebolt_lifecycle = true
+   rdk_enable_rdkservices_api = false
+   rdk_enable_wpecryptography = false
+   rdk_enable_firebolt_legacy_rpc_v1 = false
+@@ -329,6 +329,10 @@ static_library("starboard_platform") {
+     sources += [
+       "platform/firebolt_interface.cc",
+       "platform/firebolt_interface.h",
++      "platform/firebolt_lifecycle.cc",
++      "platform/firebolt_lifecycle.h",
++      "platform/firebolt_utility.cc",
++      "platform/firebolt_utility.h",
+     ]
+     libs += [
+       "FireboltClient",
+diff --git a/src/third_party/starboard/rdk/shared/application_rdk.cc b/src/third_party/starboard/rdk/shared/application_rdk.cc
+index ea77c6c..f36bc04 100644
+--- a/src/third_party/starboard/rdk/shared/application_rdk.cc
++++ b/src/third_party/starboard/rdk/shared/application_rdk.cc
+@@ -142,6 +142,8 @@ void Application::Initialize() {
+   }
+ #endif
+ 
++  platform::PlatformInterface::get().initialize();
++
+   SbAudioSinkImpl::Initialize();
+   libcobalt_api::Initialize();
+   using ::starboard::KeySystemSupportabilityCache;
+diff --git a/src/third_party/starboard/rdk/shared/application_rdk.h b/src/third_party/starboard/rdk/shared/application_rdk.h
+index 2964abf..2a92393 100644
+--- a/src/third_party/starboard/rdk/shared/application_rdk.h
++++ b/src/third_party/starboard/rdk/shared/application_rdk.h
+@@ -70,8 +70,9 @@ class Application : public ::starboard::QueueApplication {
+   int GetWindowHeight() const { return window_height_; }
+   void DisplayInfoChanged();
+ 
+-  bool IsStartImmediate() override { return !HasPreloadSwitch(); }
+-  bool IsPreloadImmediate() override { return HasPreloadSwitch(); }
++  bool IsStartImmediate() override { return !IsPreloadImmediate(); }
++  bool IsPreloadImmediate() override { return HasPreloadSwitch() || preload_immediate_; }
++  void SetPreloadImmediate() { preload_immediate_ = true; }
+ 
+  protected:
+   // --- Application overrides ---
+@@ -115,6 +116,7 @@ class Application : public ::starboard::QueueApplication {
+   int window_height_ { 0 };
+   bool resize_pending_ { false };
+   bool essos_context_recycle_ { false };
++  bool preload_immediate_ { false };
+ 
+   std::chrono::time_point<std::chrono::steady_clock> ess_loop_last_ts_;
+   int ess_timer_fd_ { -1 };
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+index be186c4..788c72b 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.cc
+@@ -21,11 +21,15 @@
+ #include "starboard/extension/accessibility.h"
+ #include "starboard/shared/starboard/media/mime_supportability_cache.h"
+ 
++#include "third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h"
++#include "third_party/starboard/rdk/shared/platform/firebolt_utility.h"
+ #include "third_party/starboard/rdk/shared/application_rdk.h"
+ #include "third_party/starboard/rdk/shared/log_override.h"
+ 
+ #include <firebolt/firebolt.h>
++#if defined(FIREBOLT_LEGACY_RPC_V1) && FIREBOLT_LEGACY_RPC_V1
+ #include <firebolt/gateway.h>
++#endif
+ 
+ #include <chrono>
+ #include <cstring>
+@@ -39,35 +43,6 @@ namespace rdk {
+ namespace shared {
+ namespace platform {
+ 
+-namespace {
+-
+-std::ostream& operator<<(std::ostream& out, const Firebolt::Error& e) {
+-  const auto to_string = [](const Firebolt::Error& e) {
+-    switch(e) {
+-#define CASE(x) case Firebolt::Error::x: return #x
+-      CASE(None);
+-      CASE(General);
+-      CASE(Timedout);
+-      CASE(NotConnected);
+-      CASE(AlreadyConnected);
+-      CASE(InvalidRequest);
+-      CASE(MethodNotFound);
+-      CASE(InvalidParams);
+-      CASE(CapabilityNotAvailable);
+-      CASE(CapabilityNotSupported);
+-      CASE(CapabilityGet);
+-      CASE(CapabilityNotPermitted);
+-#undef CASE
+-      default:
+-        return "Unknown";
+-    }
+-  };
+-
+-  return out << to_string(e) << '(' << static_cast<int32_t>(e) << ')';
+-}
+-
+-} // namespace
+-
+ // FireboltDevice
+ std::optional<Resolution> FireboltInterface::FireboltDevice::video_resolution() {
+   return { };
+@@ -485,22 +460,8 @@ void FireboltInterface::FireboltAccessibility::lazy_init(std::unique_lock<std::m
+   is_cc_enabled_ = cc_enabled;
+ }
+ 
+-FireboltInterface::FireboltInterface() {
+-// This is a workaround to resolve App focus issue. This will be modified with
+-// proper firebolt lifecycle implementation
+-#if defined(ENABLE_FIREBOLT_LIFECYCLE) && ENABLE_FIREBOLT_LIFECYCLE
+-  using namespace Firebolt;
+-  lazy_init();
+-
+-  auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
+-
+-  Result<SubscriptionId> result = lifecycle.subscribeOnStateChanged([](const std::vector<Lifecycle::StateChange>&) { });
+-
+-  if (!result) {
+-     SB_LOG(ERROR) << "lifecycle.subscribeOnStateChanged failed, error code = " << result.error();
+-  }
+-#endif
+-}
++FireboltInterface::FireboltInterface() = default;
++FireboltInterface::~FireboltInterface() = default;
+ 
+ // static
+ bool FireboltInterface::is_available() {
+@@ -521,20 +482,20 @@ void FireboltInterface::lazy_init() {
+     return;
+   }
+ 
++#if defined(FIREBOLT_LEGACY_RPC_V1) && FIREBOLT_LEGACY_RPC_V1
+   const bool kEnableLegacyRPCv1 = ([]()->bool {
+     if (const char* env = getenv("FIREBOLT_LEGACY_RPC_V1"); !!env) {
+       return (0 == strncasecmp(env, "1", 1)) || (0 == strncasecmp(env, "true", 4));
+     }
+-#if defined(FIREBOLT_LEGACY_RPC_V1) && FIREBOLT_LEGACY_RPC_V1
+     return true;
+-#else
+-    return false;
+-#endif
+   })();
++#endif
+ 
+   Firebolt::Config cfg { };
+   cfg.wsUrl = kFireboltEndpoint;
++#if defined(FIREBOLT_LEGACY_RPC_V1) && FIREBOLT_LEGACY_RPC_V1
+   cfg.legacyRPCv1 = kEnableLegacyRPCv1;
++#endif
+ #if !defined(COBALT_BUILD_TYPE_GOLD)
+   cfg.log.level = Firebolt::LogLevel::Debug;
+ #endif
+@@ -546,10 +507,12 @@ void FireboltInterface::lazy_init() {
+       if (!connected) {
+         SB_LOG(INFO) << "Firebolt client disconnected, code = " << error;
+       }
+-      {
+-        std::unique_lock<std::mutex> lock{mutex_};
++      std::unique_lock<std::mutex> lock{mutex_};
++      if (connected)
+         connected_ = connected;
+-      }
++      else
++        connected_.reset();  // reset the state to retry next time
++      lock.unlock();
+       cv_.notify_all();
+     });
+ 
+@@ -569,11 +532,12 @@ void FireboltInterface::lazy_init() {
+       break;
+   }
+ 
+-  if (*connected_) {
++  if (connected_.value_or(false)) {
+     SB_LOG(INFO) << "Firebolt client connected.";
+     const auto connected_tp = std::chrono::steady_clock::now();
+     device_.init();
+     text_to_speech_.init();
++    #if defined(FIREBOLT_LEGACY_RPC_V1) && FIREBOLT_LEGACY_RPC_V1
+     if (cfg.legacyRPCv1) {
+       // Let gateway know we're ready to receive notifications
+       auto& gateway = Firebolt::Transport::GetGatewayInstance();
+@@ -582,6 +546,7 @@ void FireboltInterface::lazy_init() {
+         SB_LOG(ERROR) << "lifecycle.ready() failed, error code = " << result.error();
+       }
+     }
++    #endif
+     const auto init_completed_tp = std::chrono::steady_clock::now();
+     SB_LOG(INFO) << "Firebolt init completed."
+                  << " Connect took: " << std::chrono::duration_cast<std::chrono::milliseconds>(connected_tp - start_tp).count() << " ms,"
+@@ -610,7 +575,28 @@ IAdvertising& FireboltInterface::advertising() {
+   return advertising_;
+ }
+ 
++void FireboltInterface::initialize() {
++  lazy_init();
++
++#if defined(ENABLE_FIREBOLT_LIFECYCLE) && ENABLE_FIREBOLT_LIFECYCLE
++  SB_CHECK(connected_.value_or(false));
++  SB_LOG(INFO) << "Initializing Firebolt Lifecycle";
++  const auto start_tp = std::chrono::steady_clock::now();
++  lifecycle_ = std::make_unique<FireboltLifecycle>();
++  lifecycle_->initialize();
++  const auto end_tp = std::chrono::steady_clock::now();
++  SB_LOG(INFO) << "Firebolt Lifecycle initialization took:"
++               << std::chrono::duration_cast<std::chrono::milliseconds>(end_tp - start_tp).count() << " ms.";
++#endif
++}
++
+ void FireboltInterface::teardown() {
++#if defined(ENABLE_FIREBOLT_LIFECYCLE) && ENABLE_FIREBOLT_LIFECYCLE
++  if (lifecycle_) {
++    lifecycle_->teardown();
++    lifecycle_.reset();
++  }
++#endif
+   Firebolt::IFireboltAccessor::Instance().Disconnect();
+ }
+ 
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+index abb85d1..1747994 100644
+--- a/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_interface.h
+@@ -23,6 +23,7 @@
+ #include <string>
+ #include <chrono>
+ #include <mutex>
++#include <memory>
+ #include <optional>
+ #include <condition_variable>
+ 
+@@ -32,6 +33,8 @@ namespace rdk {
+ namespace shared {
+ namespace platform {
+ 
++class FireboltLifecycle;
++
+ class FireboltInterface final : public PlatformInterface {
+ private:
+   struct FireboltDevice final : public IDevice {
+@@ -108,7 +111,9 @@ private:
+ 
+ public:
+   FireboltInterface();
++  ~FireboltInterface() override;
+ 
++  void initialize() override;
+   void teardown() override;
+   void suspend() override;
+   void resume() override;
+@@ -130,6 +135,7 @@ private:
+   FireboltTextToSpeech text_to_speech_;
+   FireboltAccessibility accessibility_;
+   FireboltAdvertising advertising_;
++  std::unique_ptr<FireboltLifecycle> lifecycle_;
+ };
+ 
+ }  // namespace platform
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc
+new file mode 100644
+index 0000000..82efde6
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.cc
+@@ -0,0 +1,251 @@
++//
++// Copyright 2026 Comcast Cable Communications Management, LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++// SPDX-License-Identifier: Apache-2.0
++
++#include "third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h"
++#include "third_party/starboard/rdk/shared/platform/firebolt_utility.h"
++#include "third_party/starboard/rdk/shared/application_rdk.h"
++#include "third_party/starboard/rdk/shared/libcobalt.h"
++#include "third_party/starboard/rdk/shared/log_override.h"
++
++#include <cstring>
++
++using namespace Firebolt;
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++namespace platform {
++
++namespace {
++
++const char kPreloadAction[] = "pre-load";
++const char* kDefaultExitStrategy = "suspend";
++
++} // namespace
++
++void FireboltLifecycle::teardown() {
++  auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
++  auto &actions = IFireboltAccessor::Instance().ActionsInterface();
++  auto &presentation = IFireboltAccessor::Instance().PresentationInterface();
++
++  presentation.unsubscribeAll();
++  actions.unsubscribeAll();
++  lifecycle.unsubscribeAll();
++
++  lifecycle.close(Lifecycle::CloseType::UNLOAD);
++
++  SbRdkSetConcealRequestHandler(nullptr, nullptr);
++}
++
++void FireboltLifecycle::initialize() {
++
++  // Actions
++  {
++    auto &actions = IFireboltAccessor::Instance().ActionsInterface();
++    auto result = actions.subscribeOnIntent([this](const Actions::Intent& intent){
++      on_intent(intent);
++    });
++    if (!result) {
++      SB_LOG(ERROR) << "actions.subscribeOnIntent failed, error code = " << result.error();
++    }
++    auto intent = actions.intent();
++    if (!intent) {
++      SB_LOG(ERROR) << "actions.intent failed, error code = " << intent.error();
++    } else {
++      on_intent(*intent);
++    }
++  }
++
++  // Lifecycle
++  {
++    auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
++    auto result = lifecycle.subscribeOnStateChanged([this](const std::vector<Lifecycle::StateChange>& changes) {
++      for (auto& change : changes) {
++        SB_LOG(INFO) << "lifecycle.OnStateChanged:"
++                     << " new_state=" << change.newState << ','
++                     << " old_state=" << change.oldState;
++        on_state_change(change.newState, change.oldState);
++      }
++    });
++    if (!result) {
++      SB_LOG(ERROR) << "lifecycle.subscribeOnStateChanged failed, error code = " << result.error();
++    }
++  }
++
++  // Presentation
++  {
++    auto &presentation = IFireboltAccessor::Instance().PresentationInterface();
++    auto result = presentation.subscribeOnFocusedChanged([this](const bool focused) {
++      SB_LOG(INFO) << "presentation.onFocusedChanged: focused=" << focused;
++      on_focused_changed(focused);
++    });
++    if (!result) {
++      SB_LOG(ERROR) << "presentation.subscribeOnFocusedChanged failed, error code = " << result.error();
++    }
++  }
++
++  // Configure 'exit' strategy
++  SbRdkSetConcealRequestHandler([](void*) -> int {
++    SB_LOG(INFO) << "Conceal requested, sending lifecycle.close(DEACTIVATE).";
++    auto &lifecycle = IFireboltAccessor::Instance().LifecycleInterface();
++    auto result = lifecycle.close(Lifecycle::CloseType::DEACTIVATE);
++    if (!result) {
++      SB_LOG(ERROR) << "lifecycle.close(DEACTIVATE) failed, error code = " << result.error();
++      Application::Get()->Stop(0);
++    } else {
++      Application::Get()->Conceal(nullptr, nullptr);
++    }
++    return 0;  // prevent default handler
++  }, nullptr);
++  SbRdkSetCobaltExitStrategy(kDefaultExitStrategy);
++}
++
++void FireboltLifecycle::on_intent(const Firebolt::Actions::Intent& intent) {
++  std::unique_lock<std::mutex> lock { mutex_ };
++  if (last_intent_id_ == intent.intentId)
++    return;
++
++  auto* app = Application::Get();
++
++  bool has_preload_action = (0 == strncasecmp(intent.intent.action.c_str(), kPreloadAction, strlen(kPreloadAction)));
++  if (has_preload_action && lifecycle_state_ == Lifecycle::LifecycleState::INITIALIZING) {
++    SB_LOG(INFO) << "Setting preload immediate";
++    app->SetPreloadImmediate();
++  }
++
++  // TODO: create and set deep link from intent data query
++
++  // if 'pre-load' intent got cleared then reveal the app to start rendering
++  // to drive the platform lifecycle to Active
++  if (has_preload_action_ && !has_preload_action && lifecycle_state_ == Lifecycle::LifecycleState::PAUSED) {
++    SB_LOG(INFO) << "App::Reveal";
++    app->Reveal(nullptr, nullptr);
++  }
++
++  last_intent_id_ = intent.intentId;
++  has_preload_action_ = has_preload_action;
++}
++
++void FireboltLifecycle::on_state_change(Lifecycle::LifecycleState new_state, Lifecycle::LifecycleState old_state) {
++  std::unique_lock<std::mutex> lock { mutex_ };
++  if (lifecycle_state_ == new_state)
++    return;
++
++#if SB_DCHECK_ENABLED
++  // Valid firebolt lifecycle transitions:
++  //   initializing => paused     = if (preload) conceal() else if (!focused) blur() else reveal()
++  //   initializing => suspended  = freeze()
++  //   paused => active           = if (focused) focus() else if (preload) reveal()
++  //   active => paused           = conceal()
++  //   paused => suspended        = freeze()
++  //   suspended => paused        = reveal()
++  //   suspended => hibernated
++  //   hibernated => suspended
++  //   any => terminating         = stop()
++  switch(new_state) {
++    case Lifecycle::LifecycleState::ACTIVE:
++      SB_DCHECK(old_state == Lifecycle::LifecycleState::PAUSED);
++      break;
++    case Lifecycle::LifecycleState::PAUSED:
++      SB_DCHECK(old_state == Lifecycle::LifecycleState::INITIALIZING ||
++                old_state == Lifecycle::LifecycleState::ACTIVE ||
++                old_state == Lifecycle::LifecycleState::SUSPENDED);
++      break;
++    case Lifecycle::LifecycleState::SUSPENDED:
++      SB_DCHECK(old_state == Lifecycle::LifecycleState::INITIALIZING ||
++                old_state == Lifecycle::LifecycleState::PAUSED ||
++                old_state == Lifecycle::LifecycleState::HIBERNATED);
++      break;
++      break;
++    case Lifecycle::LifecycleState::HIBERNATED:
++      SB_DCHECK(old_state == Lifecycle::LifecycleState::SUSPENDED);
++      break;
++    case Lifecycle::LifecycleState::TERMINATING:
++    case Lifecycle::LifecycleState::INITIALIZING:
++      break;
++  }
++#endif
++
++  SB_DCHECK(lifecycle_state_ == old_state);
++  lifecycle_state_ = new_state;
++
++  auto* app = Application::Get();
++  switch(new_state) {
++    case Lifecycle::LifecycleState::ACTIVE:
++      if (is_focused_) {
++        SB_LOG(INFO) << "App::Focus";
++        app->Focus(nullptr, nullptr);
++      } else if (has_preload_action_) {
++        SB_LOG(INFO) << "App::Reveal";
++        app->Reveal(nullptr, nullptr);
++      }
++      break;
++    case Lifecycle::LifecycleState::PAUSED:
++      if ((old_state == Lifecycle::LifecycleState::ACTIVE) ||
++          (old_state == Lifecycle::LifecycleState::INITIALIZING && has_preload_action_)) {
++        SB_LOG(INFO) << "App::Conceal";
++        app->Conceal(nullptr, nullptr);
++      } else if (old_state == Lifecycle::LifecycleState::INITIALIZING && !is_focused_) {
++        SB_DCHECK(!has_preload_action_);
++        SB_LOG(INFO) << "App::Blur";
++        app->Blur(nullptr, nullptr);
++      } else {
++        SB_LOG(INFO) << "App::Reveal";
++        app->Reveal(nullptr, nullptr);
++      }
++      break;
++    case Lifecycle::LifecycleState::SUSPENDED:
++      if (old_state == Lifecycle::LifecycleState::INITIALIZING ||
++          old_state == Lifecycle::LifecycleState::PAUSED) {
++        SB_LOG(INFO) << "App::Freeze";
++        app->Freeze(nullptr, nullptr);
++      }
++      break;
++    case Lifecycle::LifecycleState::TERMINATING:
++      SB_LOG(INFO) << "App::Stop";
++      app->Stop(0);
++      break;
++    case Lifecycle::LifecycleState::HIBERNATED:
++    case Lifecycle::LifecycleState::INITIALIZING:
++      // no-op
++      break;
++  }
++}
++
++void FireboltLifecycle::on_focused_changed(const bool focused) {
++  std::unique_lock<std::mutex> lock { mutex_ };
++  if (is_focused_ == focused)
++    return;
++  is_focused_ = focused;
++  if (lifecycle_state_ == Lifecycle::LifecycleState::ACTIVE) {
++    auto* app = Application::Get();
++    if (focused) {
++      SB_LOG(INFO) << "App::Focus";
++      app->Focus(nullptr, nullptr);
++    } else {
++      SB_LOG(INFO) << "App::Blur";
++      app->Blur(nullptr, nullptr);
++    }
++  }
++}
++
++}  // namespace platform
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h
+new file mode 100644
+index 0000000..7ec04b4
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_lifecycle.h
+@@ -0,0 +1,54 @@
++//
++// Copyright 2026 Comcast Cable Communications Management, LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++// SPDX-License-Identifier: Apache-2.0
++
++#pragma once
++
++#include "starboard/configuration.h"
++#include <firebolt/firebolt.h>
++#include <mutex>
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++namespace platform {
++
++class FireboltLifecycle final {
++public:
++  void initialize();
++  void teardown();
++private:
++  void on_state_change(
++    Firebolt::Lifecycle::LifecycleState new_state,
++    Firebolt::Lifecycle::LifecycleState old_state);
++
++  void on_intent(const Firebolt::Actions::Intent& intent);
++
++  void on_focused_changed(const bool);
++
++  std::mutex mutex_;
++  Firebolt::Lifecycle::LifecycleState lifecycle_state_ { Firebolt::Lifecycle::LifecycleState::INITIALIZING };
++  bool is_focused_ { false };
++  bool has_preload_action_ { false };
++  uint32_t last_intent_id_ { -1u };
++};
++
++}  // namespace platform
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc
+new file mode 100644
+index 0000000..debefdb
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.cc
+@@ -0,0 +1,76 @@
++//
++// Copyright 2026 Comcast Cable Communications Management, LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++// SPDX-License-Identifier: Apache-2.0
++
++#include "third_party/starboard/rdk/shared/platform/firebolt_utility.h"
++#include "third_party/starboard/rdk/shared/log_override.h"
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++namespace platform {
++
++std::ostream& operator<<(std::ostream& out, const Firebolt::Error& e) {
++  const auto to_string = [](const Firebolt::Error& e) {
++    switch(e) {
++#define CASE(x) case Firebolt::Error::x: return #x
++      CASE(None);
++      CASE(General);
++      CASE(Timedout);
++      CASE(NotConnected);
++      CASE(AlreadyConnected);
++      CASE(InvalidRequest);
++      CASE(MethodNotFound);
++      CASE(InvalidParams);
++      CASE(CapabilityNotAvailable);
++      CASE(CapabilityNotSupported);
++      CASE(CapabilityGet);
++      CASE(CapabilityNotPermitted);
++#undef CASE
++      default:
++        return "Unknown";
++    }
++  };
++
++  return out << to_string(e) << '(' << static_cast<int32_t>(e) << ')';
++}
++
++std::ostream& operator<<(std::ostream& out, const Firebolt::Lifecycle::LifecycleState& state) {
++  const auto to_string = [](const Firebolt::Lifecycle::LifecycleState& state) {
++    switch(state) {
++#define CASE(x) case Firebolt::Lifecycle::LifecycleState::x: return #x
++      CASE(INITIALIZING);
++      CASE(ACTIVE);
++      CASE(PAUSED);
++      CASE(SUSPENDED);
++      CASE(HIBERNATED);
++      CASE(TERMINATING);
++#undef CASE
++      default:
++        SB_NOTREACHED();
++        return "Unknown";
++    }
++  };
++
++  return out << to_string(state) << '(' << static_cast<int32_t>(state) << ')';
++}
++
++}  // namespace platform
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+diff --git a/src/third_party/starboard/rdk/shared/platform/firebolt_utility.h b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.h
+new file mode 100644
+index 0000000..8befe0d
+--- /dev/null
++++ b/src/third_party/starboard/rdk/shared/platform/firebolt_utility.h
+@@ -0,0 +1,37 @@
++//
++// Copyright 2025 Comcast Cable Communications Management, LLC
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++// SPDX-License-Identifier: Apache-2.0
++
++#pragma once
++
++#include "starboard/common/log.h"
++
++#include <firebolt/firebolt.h>
++
++namespace third_party {
++namespace starboard {
++namespace rdk {
++namespace shared {
++namespace platform {
++
++std::ostream& operator<<(std::ostream& out, const Firebolt::Error& e);
++std::ostream& operator<<(std::ostream& out, const Firebolt::Lifecycle::LifecycleState& state);
++
++}  // namespace platform
++}  // namespace shared
++}  // namespace rdk
++}  // namespace starboard
++}  // namespace third_party
+diff --git a/src/third_party/starboard/rdk/shared/platform/platform_interface.cc b/src/third_party/starboard/rdk/shared/platform/platform_interface.cc
+index f1ce6e9..ddfea09 100644
+--- a/src/third_party/starboard/rdk/shared/platform/platform_interface.cc
++++ b/src/third_party/starboard/rdk/shared/platform/platform_interface.cc
+@@ -234,6 +234,7 @@ class TracePlatformInterface final : public PlatformInterface {
+  public:
+   TracePlatformInterface(std::unique_ptr<PlatformInterface>&& api) : api_(std::move(api)) {}
+ 
++  void initialize() override { api_->initialize(); }
+   void teardown() override { api_->teardown(); }
+   void suspend() override { api_->suspend(); }
+   void resume() override { api_->resume(); }
+@@ -429,6 +430,12 @@ public:
+     : interfaces_(std::move(interfaces)) {
+   }
+ 
++  void initialize() override {
++    forEachInterface([](auto& iface) {
++      iface.initialize();
++    });
++  }
++
+   void teardown() override {
+     forEachInterface([](auto& iface) {
+       iface.teardown();
+diff --git a/src/third_party/starboard/rdk/shared/platform/platform_interface.h b/src/third_party/starboard/rdk/shared/platform/platform_interface.h
+index 5ec012d..8130fc7 100644
+--- a/src/third_party/starboard/rdk/shared/platform/platform_interface.h
++++ b/src/third_party/starboard/rdk/shared/platform/platform_interface.h
+@@ -135,6 +135,7 @@ class PlatformInterface {
+   static PlatformInterface& get();
+ 
+   virtual ~PlatformInterface() = default;
++  virtual void initialize() = 0;
+   virtual void teardown() = 0;
+   virtual void suspend() = 0;
+   virtual void resume() = 0;
+diff --git a/src/third_party/starboard/rdk/shared/rdkservices.cc b/src/third_party/starboard/rdk/shared/rdkservices.cc
+index 0f4ead3..530c1f0 100644
+--- a/src/third_party/starboard/rdk/shared/rdkservices.cc
++++ b/src/third_party/starboard/rdk/shared/rdkservices.cc
+@@ -1651,6 +1651,9 @@ bool RDKServicesInterface::is_available() {
+   return getenv("THUNDER_ACCESS") != nullptr || getenv("COBALT_ENABLE_OVERRIDES") != nullptr;
+ }
+ 
++void RDKServicesInterface::initialize() {
++}
++
+ void RDKServicesInterface::teardown() {
+   TeardownJSONRPCLink();
+ }
+diff --git a/src/third_party/starboard/rdk/shared/rdkservices.h b/src/third_party/starboard/rdk/shared/rdkservices.h
+index 6810a9a..03f6ad2 100644
+--- a/src/third_party/starboard/rdk/shared/rdkservices.h
++++ b/src/third_party/starboard/rdk/shared/rdkservices.h
+@@ -69,6 +69,7 @@ private:
+ public:
+   RDKServicesInterface();
+ 
++  void initialize() override;
+   void teardown() override;
+   void suspend() override;
+   void resume() override;
+-- 
+2.44.4
+
