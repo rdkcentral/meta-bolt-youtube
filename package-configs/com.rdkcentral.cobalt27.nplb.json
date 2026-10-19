@@ -1,0 +1,19 @@
+{
+  "id": "com.rdkcentral.cobalt27.nplb",
+  "version": "0.4.0",
+  "versionName": "develop",
+  "name": "Cobalt27 NPLB",
+  "packageType": "application",
+  "entryPoint": "/usr/bin/nplb-launcher",
+  "dependencies": {
+    "com.rdkcentral.base": "0.4.0"
+  },
+  "permissions": [
+    "urn:rdk:permission:internet",
+    "urn:rdk:permission:firebolt",
+    "urn:rdk:permission:thunder",
+    "urn:rdk:permission:rialto"
+  ],
+  "configuration": {
+  }
+}
