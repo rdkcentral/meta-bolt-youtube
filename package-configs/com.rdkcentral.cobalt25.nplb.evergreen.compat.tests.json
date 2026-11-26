@@ -1,8 +1,8 @@
 {
-  "id": "com.rdkcentral.cobalt.nplb-evergreen-compat-tests",
+  "id": "com.rdkcentral.cobalt25.nplb-evergreen-compat-tests",
   "version": "0.4.0",
   "versionName": "develop",
-  "name": "Cobalt NPLB evergreen compat tests",
+  "name": "Cobalt25 NPLB evergreen compat tests",
   "packageType": "application",
   "entryPoint": "/usr/bin/nplb-evergreen-compat-tests-launcher",
   "dependencies": {

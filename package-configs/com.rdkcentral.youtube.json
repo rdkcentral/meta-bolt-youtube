@@ -6,7 +6,7 @@
   "packageType": "application",
   "entryPoint": "--url=https://www.youtube.com/tv",
   "dependencies": {
-    "com.rdkcentral.cobalt": "0.4.0"
+    "com.rdkcentral.cobalt": "auto"
   },
   "permissions": [
     "urn:rdk:permission:internet",
@@ -15,9 +15,5 @@
     "urn:rdk:permission:rialto"
   ],
   "configuration": {
-    "urn:rdk:config:env": {
-      "COBALT_INTEGRATOR_NAME": "RDKCommonPort",
-      "COBALT_MODEL_YEAR": "2027"
-    }
   }
 }

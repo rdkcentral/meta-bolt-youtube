@@ -1,0 +1,6 @@
+{
+  "config": "com.rdkcentral.cobalt25.nplb.json",
+  "bitbake": {
+    "image": "nplb25-bolt-image"
+  }
+}
