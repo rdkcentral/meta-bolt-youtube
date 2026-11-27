@@ -31,7 +31,8 @@ PR = "r${CR}"
 
 SRCREV_cobalt = "3befd332486952f6603ae3baf2a8713878d6e200"
 SRCREV_depottools = "2cea9cdd785391335d448773124631cb711225e2"
-SRCREV_larboard = "f296c2792a63bd3d34dba786c866ac7bdc9a5046"
+# develop, Nov 23, 2026
+SRCREV_larboard = "07924c7c9e3e9a069d76ffee81a37aa7adbd8729"
 
 SRCREV_FORMAT = "cobalt_larboard"
 PV .= "+git${SRCPV}"
@@ -126,6 +127,7 @@ do_unpack_extra() {
     cd ${S}
     gclient sync -v --no-history -r ${SRCREV_cobalt}
     gclient runhooks -v
+    build/linux/sysroot_scripts/install-sysroot.py --arch=${TARGET_ARCH}
 
     bbnote "link larboard"
     ( cd "${S}/third_party/" && ln -sf ../../larboard/src/third_party/starboard . )
