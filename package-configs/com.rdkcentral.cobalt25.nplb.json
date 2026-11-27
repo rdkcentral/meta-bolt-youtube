@@ -1,12 +1,12 @@
 {
-  "id": "com.rdkcentral.cobalt27.nplb",
-  "version": "auto",
+  "id": "com.rdkcentral.cobalt25.nplb",
+  "version": "0.4.0",
   "versionName": "develop",
-  "name": "Cobalt27 NPLB",
+  "name": "Cobalt25 NPLB",
   "packageType": "application",
-  "entryPoint": "--gtest_filter=*",
+  "entryPoint": "/usr/bin/nplb-launcher",
   "dependencies": {
-    "com.rdkcentral.cobalt27": "auto"
+    "com.rdkcentral.base": "0.4.0"
   },
   "permissions": [
     "urn:rdk:permission:internet",
@@ -15,8 +15,5 @@
     "urn:rdk:permission:rialto"
   ],
   "configuration": {
-    "urn:rdk:config:env": {
-      "COBALT_HANG_DETECTOR_INTERVAL_IN_SECONDS": "0"
-    }
   }
 }

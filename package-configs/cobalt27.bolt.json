@@ -1,6 +1,0 @@
-{
-  "config": "com.rdkcentral.cobalt27.json",
-  "bitbake": {
-    "image": "cobalt27-bolt-image"
-  }
-}
